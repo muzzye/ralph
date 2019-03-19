@@ -16,7 +16,7 @@ BACKUP_VOLUME="FAKEVOLUME"
 ## ip addr
 sed -i "s/^IPADDR=\(.*\)/IPADDR=${IPADDR}/g" /etc/sysconfig/network-scripts/ifcfg-eth0
 sed -i "s/^IPADDR=\(.*\)/IPADDR=${IPADDR2}/g" /etc/sysconfig/network-scripts/ifcfg-eth1
-echo "${IPADDR}" >> /etc/ips
+echo "${IPADDR}" > /etc/ips
 echo "${IPADDR}" > /var/cpanel/mainip
 echo -e "${IPADDR}\t\t${HOSTNAME} ${HOSTNAME%%.*}" >> /etc/hosts
 
