@@ -58,7 +58,7 @@ def check_macchina(host='', max_user_virtual=300,max_user_fisica=800,perc_free=3
             maxu = max_user['default']
         if not hostname in dic.keys():
             dic[hostname] = { 'df': df, 'users': users, 'disktype': disktype, 'virtual': virtual }
-        if int(maxu) >= int(users):
+        if int(maxu) >= int(users) and int(df) > int(perc_free):
             if disktype == "SSD":
                 return dic,True
         else:
