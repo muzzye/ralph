@@ -65,7 +65,30 @@ def check_macchina(host='', max_user_virtual=300,max_user_fisica=800,perc_free=3
             return dic,False
     return dic,False
 
-## TODO: gestire l'errore
+def naemonDowntime(vm,time=600,user='lhcp_autoprovisioning',comment='inserimento_in_produzione'):
+    """ mette la macchina vm in downtime """
+    URL="https://monitor.dada.eu/pynag/dt/host/add"
+    username = "control"
+    password = "smammella"
+
+    c = pycurl.Curl()
+    c.setopt(c.URL, URL)
+    c.setopt(pycurl.HTTPAUTH, pycurl.HTTPAUTH_BASIC)
+    c.setopt(pycurl.USERPWD, username + ':' + password)
+    #c.setopt(pycurl.HTTPHEADER, ['Content-Type: application/x-www-form-urlencode'])
+    p = "h=" + vm + "&u=" + user + "&d=" + str(time) + "&c=" + comment
+    #print "post value " + p
+    c.setopt(c.POSTFIELDS, p)
+    c.setopt(c.VERBOSE, False)
+    c.setopt(pycurl.WRITEFUNCTION, lambda x: None)
+    try:
+        c.perform()
+    except:
+        return False
+    if c.getinfo(pycurl.HTTP_CODE) == 200:
+        return True
+    return False
+
 def insertServerInProvisioning(vm,wholesalers,tags):
     """ given a server vm put into provisioning in disable state """
     apiURL = 'http://cpanel.dadapro.net:8083/cpanel-adm/instance'
@@ -567,7 +590,6 @@ def controlla_macchine(active_server=[],available_server=[],config=[],macchine_d
             print "metto una macchina nuova nel provisioning (" + macchina_da_inserire + ")"
             content=vmware_connect(general_config['host'],general_config['user'],general_config['pass'])
             vmware_poweron(macchina_da_inserire,content)
-            insertServerInProvisioning(macchina_da_inserire,config['wh'],config['tags'])
             activate_cloudlinux_license(macchina_da_inserire)
             create_dns_record(macchina_da_inserire)
             time.sleep(60)
@@ -576,6 +598,8 @@ def controlla_macchine(active_server=[],available_server=[],config=[],macchine_d
             softaculous_licence(macchina_da_inserire)
             configure_puppet(macchina_da_inserire,general_config['puppet_path'])
             configure_naemon(macchina_da_inserire,config['puppet_template'],general_config['puppet_path'])
+            naemonDowntime(macchina_da_inserire)
+            insertServerInProvisioning(macchina_da_inserire,config['wh'],config['tags'])
         else:
             print "\033[1;31;40mATTENZIONE non ho macchine da inserire\033[1;37;40m"
 
