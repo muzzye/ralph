@@ -39,3 +39,6 @@ chmod +x /usr/local/scripts/estrai_cPanel_id.py
 
 ## registrazione cloudlinux
 /usr/sbin/clnreg_ks --force
+
+## deploy cic
+puppi deploy cpanel-instance-client
