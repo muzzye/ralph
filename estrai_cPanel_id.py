@@ -4,19 +4,15 @@ import suds.client
 import ConfigParser
 import socket
 import subprocess
-import sys
-
-if len(sys.argv) < 2:
-    print "usage: " + sys.argv[0] + " <hostname_in_fqdn>"
-    sys.exit(2)
 
 username = 'admin'
 password = "funzionicchiaTutto!1518<"
-hostname = sys.argv[1]
+hostname = socket.gethostname()
 
 configfile = '/etc/r1soft.ini'
 file_path = '/root/r1soft-cpanel-plugin-2.0/r1redirect.php'
-dst_path  = '/usr/local/cpanel/base/frontend/paper_lantern/'
+#dst_path  = '/usr/local/cpanel/base/frontend/paper_lantern/'
+dst_path  = '/tmp'
 config = ConfigParser.ConfigParser()
 config.read(configfile)
 

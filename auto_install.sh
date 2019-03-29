@@ -18,6 +18,8 @@ sed -i "s/^IPADDR=\(.*\)/IPADDR=${IPADDR}/g" /etc/sysconfig/network-scripts/ifcf
 sed -i "s/^IPADDR=\(.*\)/IPADDR=${IPADDR2}/g" /etc/sysconfig/network-scripts/ifcfg-eth1
 echo "${IPADDR}" > /etc/ips
 echo "${IPADDR}" > /var/cpanel/mainip
+sed -i "/lhcpclone/d" /etc/hosts
+sed -i "/lhcp2042/d" /etc/hosts
 echo -e "${IPADDR}\t\t${HOSTNAME} ${HOSTNAME%%.*}" >> /etc/hosts
 
 ## rimozione file inutili
