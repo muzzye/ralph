@@ -32,7 +32,7 @@ for k in config:
         available_server=get_active_server(mnt=config[k]['wh'],active='false',tags=config[k]['tags'])
         #print available_server
         ## chiede a elasticsearch quali macchine possono entrare nel provisioning
-        prov_ssd = valida_macchine(server=available_server,max_user_virtual=config[k]['user_virtual'],max_user_fisica=config[k]['user_fisica'],perc_free=config[k]['disk'])
+        prov_ssd = valida_macchine(server=available_server,max_user_virtual=config[k]['user_virtual'],max_user_fisica=config[k]['user_fisica'],perc_free=config[k]['disk'],blacklist=config['general']['blacklist'])
         #print prov_ssd
         ## controlla se le macchine attive possono rimanere nel provisioning, in caso negativo mette una nuova macchina nel provisioning e toglie la vecchia
         ## se necessario installa una nuova macchina lhcp

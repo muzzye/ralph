@@ -65,7 +65,7 @@ def check_macchina(host='', max_user_virtual=300,max_user_fisica=800,perc_free=3
             return dic,False
     return dic,False
 
-def naemonDowntime(vm,time=600,user='lhcp_autoprovisioning',comment='inserimento_in_produzione'):
+def naemonDowntime(vm='',time=900,user='lhcp_autoprovisioning',comment='inserimento_in_produzione'):
     """ mette la macchina vm in downtime """
     URL="https://monitor.dada.eu/pynag/dt/host/add"
     username = "control"
@@ -80,7 +80,7 @@ def naemonDowntime(vm,time=600,user='lhcp_autoprovisioning',comment='inserimento
     #print "post value " + p
     c.setopt(c.POSTFIELDS, p)
     c.setopt(c.VERBOSE, False)
-    c.setopt(pycurl.WRITEFUNCTION, lambda x: None)
+    ##c.setopt(pycurl.WRITEFUNCTION, lambda x: None)
     try:
         c.perform()
     except:
@@ -189,17 +189,18 @@ def cerca_backup():
         return newlist.pop(0)
     return []
 
-def valida_macchine(server=[],max_user_virtual=300,max_user_fisica=800,perc_free=30):
+def valida_macchine(server=[],max_user_virtual=300,max_user_fisica=800,perc_free=30,blacklist=[]):
     """ data una lista di macchine con i relativi parametri (max_user,perc_free) """
     """ ritorna un dizionario con le sole macchine papabili per il provisioning come chiave """
     """ e i seguenti valori {'df': 25, 'users': 637, 'virtual': False, 'disktype': u'SSD'} """
 
     prov_ssd = {}
     for macchina in server:
-        tmp_ssd = {}
-        tmp_ssd,res = check_macchina(macchina,max_user_virtual,max_user_fisica,perc_free)
-        if res:
-            prov_ssd.update(tmp_ssd)
+        if not macchina in blacklist:
+            tmp_ssd = {}
+            tmp_ssd,res = check_macchina(macchina,max_user_virtual,max_user_fisica,perc_free)
+            if res:
+                prov_ssd.update(tmp_ssd)
 
     return prov_ssd
 
@@ -509,6 +510,7 @@ def vmware_getavailableserver(host,user,pwd,port=443):
                     macchine_da_inserire = macchine_da_inserire + name
     print "ci sono " + str(len(macchine_da_inserire)) + " macchine da inserire nel provisioning:"
     macchine_da_inserire.sort()
+    #macchine_da_inserire.reverse()
     for n in macchine_da_inserire:
         print n,
     print
@@ -522,8 +524,11 @@ def read_config(file):
     config.read(file)
 
     conf = {}
+    blacklist = []
+    for black in config.get('general','blacklist').split(','):
+        blacklist.append(black)
     ## TODO: gestire l'errore nel caso in cui manchi un parametro (prevedere un default)
-    conf['general'] = { 'host': config.get('general','host'), 'user': config.get('general','user'), 'pass': config.get('general','pass'), 'brand': config.get('general','brand'), 'puppet_path': config.get('general','puppet_path') }
+    conf['general'] = { 'host': config.get('general','host'), 'user': config.get('general','user'), 'pass': config.get('general','pass'), 'brand': config.get('general','brand'), 'puppet_path': config.get('general','puppet_path'), 'blacklist': blacklist }
     for brand in conf['general']['brand'].split(','):
         conf[brand]= { 'brand': config.get(brand,'brand'), 'user_fisica': config.get(brand,'user_fisica'), 'user_virtual': config.get(brand,'user_virtual'), 'disk': config.get(brand,'disk'), 'user_per_day': config.get(brand,'user_per_day'), 'wh': config.get(brand,'wh'), 'puppet_template': config.get(brand,'puppet_template'), 'tags': config.get(brand,'tags').split(",") }
     return conf
@@ -598,7 +603,8 @@ def controlla_macchine(active_server=[],available_server=[],config=[],macchine_d
             softaculous_licence(macchina_da_inserire)
             configure_puppet(macchina_da_inserire,general_config['puppet_path'])
             configure_naemon(macchina_da_inserire,config['puppet_template'],general_config['puppet_path'])
-            naemonDowntime(macchina_da_inserire)
+            time.sleep(30)
+            naemonDowntime(vm=macchina_da_inserire)
             insertServerInProvisioning(macchina_da_inserire,config['wh'],config['tags'])
         else:
             print "\033[1;31;40mATTENZIONE non ho macchine da inserire\033[1;37;40m"
