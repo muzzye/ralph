@@ -10,6 +10,7 @@ from StringIO import StringIO
 from pyVim.connect import SmartConnect, Disconnect
 from pyVmomi import vim
 import time
+import datetime
 
 import atexit
 import ssl
@@ -141,7 +142,7 @@ def get_ipaddr(vm):
     """ data una macchina ritorna l'indirizzo ip"""
     """ se corretto altrimenti ritorna null """
     hnum = re.findall("\d+$",vm)
-    if hnum[0][1:] > 255:
+    if int(hnum[0][1:]) < 255:
         ip4 = str(int(hnum[0][1:4]))
         if int(hnum[0][0]) == 0:
             ## macchina lhcp0xxx
@@ -277,6 +278,55 @@ def utenti_residui(dic={},users_default=0,users_virtual=0):
             utenti = utenti + int(max_user['default']) - int(dic[key]['users'])
 
     return utenti
+
+def serial_update(serial):
+    """ return the updated bind serial number """
+    today_serial = datetime.datetime.now().strftime('%Y%m%d')
+    serial_date = serial[:-2]
+    serial_id = serial[8:]
+    updated_serial = ''
+    if today_serial == serial_date:
+        updated_serial = '\t\t\t\t\t%s%02i\t; serial YYYYMMDDnn\n' %\
+                         (serial_date, int(serial_id) + 1)
+    else:
+        updated_serial = '\t\t\t\t\t%s01\t; serial YYYYMMDDnn\n' %\
+                         today_serial
+    return updated_serial
+
+def create_reverse(server,puppet_git_path):
+    """given a server insert a reverse"""
+    """if not already present         """
+    ip_addr = get_ipaddr(server)
+    if ip_addr:
+        ip1 = ip_addr.split('.')[0]
+        ip2 = ip_addr.split('.')[1]
+        ip3 = ip_addr.split('.')[2]
+        ip4 = ip_addr.split('.')[3]
+        relative_zone_file = "modules/dadabind9/files/zones/db." + str(ip3) + "." + str(ip2) + "." + str(ip1) + ".in-addr.arpa"
+        zone_file = puppet_git_path + "/" + relative_zone_file
+        #print "ip1: " + str(ip1) + " ip2: " + str(ip2) + " ip3: " + str(ip3) + " ip4: " + ip4 + " file: " + zone_file
+        if os.path.isfile(zone_file):
+            if not server in open(zone_file).read():
+                with open(zone_file, 'r+') as zone:
+                    updated_zone = zone.readlines()
+                    zone.seek(0)
+                    for record in updated_zone:
+                        if '; serial' in record:
+                            serial = record.split(';')[0].strip()
+                            record = serial_update(serial)
+                        zone.write(record)
+                    zone.write(str(ip4) + "\t\t\tIN\tPTR\t" + str(server) + ".webapps.net.\n")
+                    zone.truncate()
+                    bashCommand = "cd " + puppet_git_path + " && git pull && git add " + relative_zone_file + " && git commit -m 'autocommit reverse for " + str(server) + "' && git push"
+                    print bashCommand
+                    os.system(bashCommand)
+                return True
+            else:
+                print "server " + str(server) + " already present in zone file " + str(zone_file)
+                return False
+    else:
+        return False
+    return False
 
 def check_server (host):
     """data una macchina ritorna True se e' attiva nel provisioning, False se non lo e'"""
@@ -553,7 +603,7 @@ def read_config(file):
     for black in config.get('general','blacklist').split(','):
         blacklist.append(black)
     ## TODO: gestire l'errore nel caso in cui manchi un parametro (prevedere un default)
-    conf['general'] = { 'host': config.get('general','host'), 'user': config.get('general','user'), 'pass': config.get('general','pass'), 'brand': config.get('general','brand'), 'puppet_path': config.get('general','puppet_path'), 'blacklist': blacklist }
+    conf['general'] = { 'host': config.get('general','host'), 'user': config.get('general','user'), 'pass': config.get('general','pass'), 'brand': config.get('general','brand'), 'puppet_path': config.get('general','puppet_path'), 'puppet_git_path': config.get('general','puppet_git_path'), 'blacklist': blacklist }
     for brand in conf['general']['brand'].split(','):
         conf[brand]= { 'brand': config.get(brand,'brand'), 'user_fisica': config.get(brand,'user_fisica'), 'user_virtual': config.get(brand,'user_virtual'), 'disk': config.get(brand,'disk'), 'user_per_day': config.get(brand,'user_per_day'), 'wh': config.get(brand,'wh'), 'puppet_template': config.get(brand,'puppet_template'), 'tags': config.get(brand,'tags').split(",") }
     return conf
