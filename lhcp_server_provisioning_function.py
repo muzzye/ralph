@@ -139,27 +139,34 @@ def getVmSwitchedOff(vm, depth=1):
 
 def get_ipaddr(vm):
     """ data una macchina ritorna l'indirizzo ip"""
+    """ se corretto altrimenti ritorna null """
     hnum = re.findall("\d+$",vm)
-    ip4 = str(int(hnum[0][1:4]))
-    if int(hnum[0][0]) == 0:
-        ## macchina lhcp0xxx
-        ip1 = "81.88."
-        ip3 = str(62 + int(hnum[0][0]))
+    if hnum[0][1:] > 255:
+        ip4 = str(int(hnum[0][1:4]))
+        if int(hnum[0][0]) == 0:
+            ## macchina lhcp0xxx
+            ip1 = "81.88."
+            ip3 = str(62 + int(hnum[0][0]))
+        else:
+            ## macchina lhcp[12]xxx
+            ip1 = "185.2."
+            ip3 = str(3 + int(hnum[0][0]))
+        ipaddr = ip1 + ip3 + "." + ip4
+        return ipaddr
     else:
-        ## macchina lhcp[12]xxx
-        ip1 = "185.2."
-        ip3 = str(3 + int(hnum[0][0]))
-    ipaddr = ip1 + ip3 + "." + ip4
-    return ipaddr
+        return False
 
 def get_ipaddr_eth1(vm):
     """ data una macchina ritorna l'indirizzo ip della eth1"""
     hnum = re.findall("\d+$",vm)
-    ip4 = str(int(hnum[0][1:4]))
-    ip1 = "172.22."
-    ip3 = str(15 + int(hnum[0][0]))
-    ipaddr = ip1 + ip3 + "." + ip4
-    return ipaddr
+    if hnum[0][1:] > 255:
+        ip4 = str(int(hnum[0][1:4]))
+        ip1 = "172.22."
+        ip3 = str(15 + int(hnum[0][0]))
+        ipaddr = ip1 + ip3 + "." + ip4
+        return ipaddr
+    else:
+        return False
 
 def cerca_backup():
     """ cerca la macchina lhbk e il device con meno risorse in termine di: """
@@ -338,10 +345,11 @@ def configure_puppet(vm,puppet_path):
         os.system(bashCommand)
 
         print "puppet run"
-        ipaddr = get_ipaddr(vm)
-        bashCommand = "ssh -oStrictHostKeyChecking=no -p 25088 root@" + ipaddr + " 'puppet agent -t'"
-        os.system(bashCommand)
-        return True
+        ipaddr = get_ipaddr
+        if ipaddr:
+            bashCommand = "ssh -oStrictHostKeyChecking=no -p 25088 root@" + ipaddr + " 'puppet agent -t'"
+            os.system(bashCommand)
+            return True
     return False
 
 def configure_naemon(vm,puppet_template,puppet_path):
@@ -381,82 +389,99 @@ def configure_naemon(vm,puppet_template,puppet_path):
 def vmware_configure_server(vm):
     """ data una macchina la configura """
     ipaddr1 = get_ipaddr(vm)
-    ipaddr2 = get_ipaddr_eth1(vm)
-    with open('auto_install.sh', 'r') as file:
-        filedata = file.read()
+    get_ipaddr_eth1(vm)
+    if ( ipaddr1 and ipaddr2):
+        with open('auto_install.sh', 'r') as file:
+            filedata = file.read()
 
-    dic = cerca_backup()
-    # Replace the target string
-    filedata = filedata.replace('FAKEHOSTNAME', vm + '.webapps.net')
-    filedata = filedata.replace('FAKEIPADDR1', ipaddr1)
-    filedata = filedata.replace('FAKEIPADDR2', ipaddr2)
-    filedata = filedata.replace('FAKEBACKUPSERVER', dic['host'])
-    filedata = filedata.replace('FAKEHOUR', str(dic['num_lhcp']).zfill(2))  ## TODO: vedere se e' il caso di usare il metodo muzz e verificare script niccoli
-    filedata = filedata.replace('FAKEVOLUME', dic['device'])
+        dic = cerca_backup()
+        # Replace the target string
+        filedata = filedata.replace('FAKEHOSTNAME', vm + '.webapps.net')
+        filedata = filedata.replace('FAKEIPADDR1', ipaddr1)
+        filedata = filedata.replace('FAKEIPADDR2', ipaddr2)
+        filedata = filedata.replace('FAKEBACKUPSERVER', dic['host'])
+        filedata = filedata.replace('FAKEHOUR', str(dic['num_lhcp']).zfill(2))  ## TODO: vedere se e' il caso di usare il metodo muzz e verificare script niccoli
+        filedata = filedata.replace('FAKEVOLUME', dic['device'])
 
-    # Write the file out again
-    with open('auto_install2.sh', 'w') as file:
-        file.write(filedata)
+        # Write the file out again
+        with open('auto_install2.sh', 'w') as file:
+            file.write(filedata)
 
-    temporary_ipaddr = "185.2.6.241"
-    ## copia i files sulla macchina (dovrebbero essere sul template)
-    bashCommand = "scp -P 25088 auto_install2.sh root@" + temporary_ipaddr + ":/root/auto_install.sh"
-    os.system(bashCommand)
-    bashCommand = "ssh -oStrictHostKeyChecking=no -p 25088 root@" + temporary_ipaddr + " 'chmod +x /root/auto_install.sh'"
-    os.system(bashCommand)
+        temporary_ipaddr = "185.2.6.241"
+        ## copia i files sulla macchina (dovrebbero essere sul template)
+        bashCommand = "scp -P 25088 auto_install2.sh root@" + temporary_ipaddr + ":/root/auto_install.sh"
+        os.system(bashCommand)
+        bashCommand = "ssh -oStrictHostKeyChecking=no -p 25088 root@" + temporary_ipaddr + " 'chmod +x /root/auto_install.sh'"
+        os.system(bashCommand)
 
-    bashCommand = "scp -P 25088 estrai_cPanel_id.py root@" + temporary_ipaddr + ":/usr/local/scripts/"
-    os.system(bashCommand)
+        bashCommand = "scp -P 25088 estrai_cPanel_id.py root@" + temporary_ipaddr + ":/usr/local/scripts/"
+        os.system(bashCommand)
 
-    bashCommand = "ssh -oStrictHostKeyChecking=no -p 25088 root@" + temporary_ipaddr + " '/root/auto_install.sh'"
-    os.system(bashCommand)
+        bashCommand = "ssh -oStrictHostKeyChecking=no -p 25088 root@" + temporary_ipaddr + " '/root/auto_install.sh'"
+        os.system(bashCommand)
 
-    bashCommand = "ssh -oStrictHostKeyChecking=no -p 25088 root@" + temporary_ipaddr + " 'reboot'"
-    os.system(bashCommand)
+        bashCommand = "ssh -oStrictHostKeyChecking=no -p 25088 root@" + temporary_ipaddr + " 'reboot'"
+        os.system(bashCommand)
+        return True
+    else:
+        return False
 
 def softaculous_licence(vm):
     """ data una macchina attiva la licenza softaculous """
     ipaddr = get_ipaddr(vm)
+    if ipaddr:
 
-    with open('soft.php', 'r') as file:
-        filedata = file.read()
+        with open('soft.php', 'r') as file:
+            filedata = file.read()
 
-    # Replace the target string
-    filedata = filedata.replace('FAKEIPADDR', ipaddr)
+        # Replace the target string
+        filedata = filedata.replace('FAKEIPADDR', ipaddr)
 
-    # Write the file out again
-    with open('soft2.php', 'w') as file:
-        file.write(filedata)
+        # Write the file out again
+        with open('soft2.php', 'w') as file:
+            file.write(filedata)
 
-    bashCommand = "php ./soft2.php"
-    os.system(bashCommand)
+        bashCommand = "php ./soft2.php"
+        os.system(bashCommand)
 
-    bashCommand = "ssh -oStrictHostKeyChecking=no -p 25088 root@" + ipaddr + " '/usr/local/cpanel/3rdparty/bin/php /usr/local/cpanel/whostmgr/docroot/cgi/softaculous/cron.php && /usr/local/cpanel/3rdparty/bin/php /usr/local/cpanel/whostmgr/docroot/cgi/softaculous/cli.php -l'"
-    os.system(bashCommand)
+        bashCommand = "ssh -oStrictHostKeyChecking=no -p 25088 root@" + ipaddr + " '/usr/local/cpanel/3rdparty/bin/php /usr/local/cpanel/whostmgr/docroot/cgi/softaculous/cron.php && /usr/local/cpanel/3rdparty/bin/php /usr/local/cpanel/whostmgr/docroot/cgi/softaculous/cli.php -l'"
+        os.system(bashCommand)
+        return True
+    else:
+        return False
 
 def activate_cloudlinux_license(vm):
     """ dato un indirizzo ip attiva le licenze di cloudlinux """
     ipaddr = get_ipaddr(vm)
-    ts = int(time.time())
-    key = 'CCqHtuQDnjifqvZW'
-    CS = 'register-it-prod'
-    m = hashlib.sha1(key+str(ts))
-    TOKEN = CS + "|" + str(ts) + "|" + m.hexdigest()
+    if ipaddr:
+        ts = int(time.time())
+        key = 'CCqHtuQDnjifqvZW'
+        CS = 'register-it-prod'
+        m = hashlib.sha1(key+str(ts))
+        TOKEN = CS + "|" + str(ts) + "|" + m.hexdigest()
 
-    buffer = StringIO()
-    type = [ 1, 16]
-    for t in type:
-        c = pycurl.Curl()
-        c.setopt(c.URL, 'https://cln.cloudlinux.com/api/ipl/register.json?ip=' + ipaddr + '&type=' + str(t) + '&token=' + TOKEN)
-        c.setopt(c.WRITEDATA, buffer)
-        c.perform()
-        c.close()
+        buffer = StringIO()
+        type = [ 1, 16]
+
+        for t in type:
+            c = pycurl.Curl()
+            c.setopt(c.URL, 'https://cln.cloudlinux.com/api/ipl/register.json?ip=' + ipaddr + '&type=' + str(t) + '&token=' + TOKEN)
+            c.setopt(c.WRITEDATA, buffer)
+            c.perform()
+            c.close()
+        return True
+    else:
+        return False
 
 def create_dns_record(vm):
     """ data una macchina crea i record dns necessari"""
     ipaddr = get_ipaddr(vm)
-    bashCommand = "ssh root@git01.it.dadainternal /root/daniele/add_lhcp.pl " + vm + ".webapps.net " + ipaddr
-    os.system(bashCommand)
+    if ipaddr:
+        bashCommand = "ssh root@git01.it.dadainternal /root/daniele/add_lhcp.pl " + vm + ".webapps.net " + ipaddr
+        os.system(bashCommand)
+        return True
+    else:
+        return False
 
 def vmware_connect(host,user,pwd,port=443):
     context = None
