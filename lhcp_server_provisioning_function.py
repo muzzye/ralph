@@ -395,7 +395,7 @@ def configure_puppet(vm,puppet_path):
         os.system(bashCommand)
 
         print "puppet run"
-        ipaddr = get_ipaddr
+        ipaddr = get_ipaddr(vm)
         if ipaddr:
             bashCommand = "ssh -oStrictHostKeyChecking=no -p 25088 root@" + ipaddr + " 'puppet agent -t'"
             os.system(bashCommand)
@@ -431,7 +431,7 @@ def configure_naemon(vm,puppet_template,puppet_path):
             os.system(bashCommand)
             time.sleep(5)
 
-        bashCommand = "ssh root@anael01.it.dadainternal 'puppet agent -t'"
+        bashCommand = "ssh root@anael01.it.dadainternal 'puppet agent -t ; /usr/local/cpanel/3rdparty/bin/php /usr/local/cpanel/whostmgr/docroot/cgi/softaculous/cli.php  --install --cpuser=nagioscheck --cppass=Nagios.User,69 --soft=26 --softdirectory=wp --admin_username=admin --admin_pass=Nagios.User,69 --site_name=\"NagiosCheck Blog\"'"
         os.system(bashCommand)
         return True
     return False
@@ -439,7 +439,7 @@ def configure_naemon(vm,puppet_template,puppet_path):
 def vmware_configure_server(vm):
     """ data una macchina la configura """
     ipaddr1 = get_ipaddr(vm)
-    get_ipaddr_eth1(vm)
+    ipaddr2 = get_ipaddr_eth1(vm)
     if ( ipaddr1 and ipaddr2):
         with open('auto_install.sh', 'r') as file:
             filedata = file.read()

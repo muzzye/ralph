@@ -11,6 +11,8 @@ BACKUP_VOLUME="FAKEVOLUME"
 ## --- fine parametri ---
 
 ## hostname
+HOSTNAME_LOCK_FILE="/var/cpanel/.application-locks/UpdateHostname"
+[ -f ${HOSTNAME_LOCK_FILE} ] && rm -rf ${HOSTNAME_LOCK_FILE}
 /usr/local/cpanel/bin/set_hostname ${HOSTNAME}
 
 ## ip addr
