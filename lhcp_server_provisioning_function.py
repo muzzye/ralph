@@ -212,58 +212,6 @@ def valida_macchine(server=[],max_user_virtual=300,max_user_fisica=800,perc_free
 
     return prov_ssd
 
-## Da cancellare
-def cerca_macchine(brand='',max_user_virtual=300,max_user_default=800,perc_free=30,active="false"):
-    """ dato un brand cerca le macchine disponibili con i criteri specificati nel file di configurazione """
-    """ in termini di massimo numero di utenti per macchine e percentuale di spazio disco libero """
-    """ questi valori nel file di configurazione sono personalizzabili per brand e differenziabili """
-    """ fra tipologia di macchina (fisica o virtuale) """
-    max_user = {}
-    max_user['virtual'] = max_user_virtual
-    max_user['default'] = max_user_default
-
-    es = Elasticsearch([{'host': '172.22.131.66', 'port': 9200}])
-
-    request = '{"aggs": {"hostname": { "terms": { "field": "host.name", "size": 1000, "order": { "_count": "desc" } }, "aggs": { "df": { "terms": { "field": "perc_disk_free", "size": 1000, "order": {"_count": "desc" } }, "aggs": { "users": {"terms": {"field": "tot_users_real","size": 1000,"order": {"_count": "desc"}},"aggs": {"disktype": {"terms": {"field": "disk_type","size": 5,"order": {"_count": "desc"}},"aggs": {"controller": {"terms": { "field": "ctrl_type", "size": 1000, "order": { "_count": "desc" }}}}}} } } } }}},"size": 0,"version": true,"_source": {"excludes": []},"query": {"bool": { "must": [ { "query_string": { "query": "perc_disk_free: ['  + str(perc_free) + ' TO 100] AND isActive: ' + active + '", "analyze_wildcard": true, "default_field": "*" } }, { "range": { "@timestamp": {"gte": "now-80m","lte": "now" } } }, { "match_phrase": { "wholesaler": {"query": "' + brand + '" } } } ]}}}'
-    #print request
-    res = es.search(index="systems-*", body=request )
-
-    #print res ## debug only
-    dic = {}
-    dic_sas = {}
-
-    for hit in res['aggregations']['hostname']['buckets']:
-        hostname = hit['key']
-        df = hit['df']['buckets'][0]['key']
-        users = hit['df']['buckets'][0]['users']['buckets'][0]['key']
-        disktype =  hit['df']['buckets'][0]['users']['buckets'][0]['disktype']['buckets'][0]['key']
-        controller = hit['df']['buckets'][0]['users']['buckets'][0]['disktype']['buckets'][0]['controller']['buckets'][0]['key']
-        if controller == 'VMWare':
-            virtual = True
-            maxu = max_user['virtual']
-            ## le virtuali hanno tutte dischi SSD
-            disktype = "SSD"
-        else:
-            virtual = False
-            maxu = max_user['default']
-        #if df >= perc_free and max > users:
-        if int(maxu) > int(users):
-            if disktype == "SSD":
-                if not hostname in dic.keys():
-                    if not check_server(hostname):
-                        dic[hostname] = { 'df': df, 'users': users, 'disktype': disktype, 'virtual': virtual }
-            else:
-                if not hostname in dic_sas.keys():
-                    if not check_server(hostname):
-                        dic_sas[hostname] = { 'df': df, 'users': users, 'disktype': disktype, 'virtual': virtual }
-        else:
-            if active == "true":
-                print "togli dal provisioning la macchina " + hostname + " perche' ha " + str(users) + " utenti (virtual= " + str(virtual) + ")"
-            #else:
-            #    print "scarto "+ hostname + " perche' ha " + str(users) + " utenti (virtual= " + str(virtual) + ")"
-
-    return dic,dic_sas
-
 def utenti_residui(dic={},users_default=0,users_virtual=0):
     """ dato un dizionario di macchine ritorna il numero di utenti ancora disponibili """
     utenti = 0
