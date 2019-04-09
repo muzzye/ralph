@@ -176,25 +176,25 @@ def cerca_backup():
     """ {'device': u'sdb', 'host': u'lhbk2002.webapps.net', 'perc_used_disk': 1, 'num_lhcp': 0} """
 
     es = Elasticsearch([{'host': '172.22.131.66', 'port': 9200}])
-    request = '{"aggs": { "hostname": { "terms": { "field": "beat.hostname", "size": 5, "order": { "_count": "desc" } }, "aggs": { "device": { "terms": { "field": "device", "size": 5, "order": { "_count": "desc" } }, "aggs": { "num_lhcp": { "terms": {"field": "num_lhcp", "size": 5, "order": { "_count": "desc" } }, "aggs": { "perc_used_disk": { "terms": { "field": "perc_used_disk", "size": 5, "order": { "_count": "desc" } } } } } } } } } }, "size": 0, "version": true, "_source": { "excludes": [] }, "stored_fields": [ "*" ], "script_fields": {}, "docvalue_fields": [ { "field": "@timestamp", "format": "date_time"}],"query": {"bool": {"must": [{"query_string": {"query": "perc_used_disk: [ 0 TO 75 ] AND num_lhcp: [ 0 TO 10]"}},{"match_all": {}},{"range": {"@timestamp": {"gte": "now-140m","lte": "now"}}}],"filter": [],"should": [],"must_not": []}},"highlight": {"pre_tags": ["@kibana-highlighted-field@"],"post_tags": ["@/kibana-highlighted-field@"],"fields": {"*": {}} }}'
+    #request = '{"aggs": { "hostname": { "terms": { "field": "beat.hostname", "size": 5, "order": { "_count": "desc" } }, "aggs": { "device": { "terms": { "field": "device", "size": 5, "order": { "_count": "desc" } }, "aggs": { "num_lhcp": { "terms": {"field": "num_lhcp", "size": 5, "order": { "_count": "desc" } }, "aggs": { "perc_used_disk": { "terms": { "field": "perc_used_disk", "size": 5, "order": { "_count": "desc" } } } } } } } } } }, "size": 0, "version": true, "_source": { "excludes": [] }, "stored_fields": [ "*" ], "script_fields": {}, "docvalue_fields": [ { "field": "@timestamp", "format": "date_time"}],"query": {"bool": {"must": [{"query_string": {"query": "perc_used_disk: [ 0 TO 75 ] AND num_lhcp: [ 0 TO 10]"}},{"match_all": {}},{"range": {"@timestamp": {"gte": "now-140m","lte": "now"}}}],"filter": [],"should": [],"must_not": []}},"highlight": {"pre_tags": ["@kibana-highlighted-field@"],"post_tags": ["@/kibana-highlighted-field@"],"fields": {"*": {}} }}'
+    request = '{ "sort": [ { "perc_used_disk": { "order": "asc" } }, { "num_lhcp": { "order": "asc" } } ],"_source": ["beat.hostname","device","num_lhcp","perc_used_disk"],"query": {"bool": {"must": [{"query_string": {"query": "perc_used_disk: [ 0 TO 65 ] AND num_lhcp: [ 0 TO 9]"}},{"match_all": {}},{"range": {"@timestamp": {"gte": "now-140m","lte": "now"}}}]}}}'
     #print request
     res = es.search(index="lhbk-*", body=request )
 
-    #print res ## debug only
+    #print res['hits']['hits'] ## debug only
     arr=[]
-    for hit in res['aggregations']['hostname']['buckets']:
-#        print hit
-        host = hit['key']
-        for hit2 in hit['device']['buckets']:
-            device = hit2['key'][5:8]   ## /dev/sdb1 -> sdb
-            num_lhcp = hit2['num_lhcp']['buckets'][0]['key']
-            perc_used_disk = hit2['num_lhcp']['buckets'][0]['perc_used_disk']['buckets'][0]['key']
-            arr.append ({ 'host': host, 'device': device, 'num_lhcp': num_lhcp, 'perc_used_disk': perc_used_disk })
+    for hit in res['hits']['hits']:
+        #print hit['_source']
+        # {u'beat': {u'hostname': u'lhbk1022.webapps.net'}, u'device': u'/dev/sdb1', u'perc_used_disk': u'1', u'num_lhcp': u'0'}
+        host = hit['_source']['beat']['hostname']
+        device = hit['_source']['device']
+        num_lhcp = hit['_source']['num_lhcp']
+        perc_used_disk = hit['_source']['perc_used_disk']
+        arr.append ({ 'host': host, 'device': device, 'num_lhcp': num_lhcp, 'perc_used_disk': perc_used_disk })
 
-    #print arr
-    newlist = sorted(arr, key=lambda k: (k['num_lhcp'], k['perc_used_disk']))
-    if len(newlist) > 0:
-        return newlist.pop(0)
+    print arr
+    if len(arr) > 0:
+        return arr.pop(0)
     return []
 
 def valida_macchine(server=[],max_user_virtual=300,max_user_fisica=800,perc_free=30,blacklist=[]):
@@ -436,7 +436,7 @@ def configure_naemon(vm,puppet_template,puppet_path):
         return True
     return False
 
-def vmware_configure_server(vm):
+def vmware_configure_server(vm,temporary_ipaddr='185.2.6.241'):
     """ data una macchina la configura """
     ipaddr1 = get_ipaddr(vm)
     ipaddr2 = get_ipaddr_eth1(vm)
@@ -457,7 +457,6 @@ def vmware_configure_server(vm):
         with open('auto_install2.sh', 'w') as file:
             file.write(filedata)
 
-        temporary_ipaddr = "185.2.6.241"
         ## copia i files sulla macchina (dovrebbero essere sul template)
         bashCommand = "scp -P 25088 auto_install2.sh root@" + temporary_ipaddr + ":/root/auto_install.sh"
         os.system(bashCommand)
@@ -583,12 +582,12 @@ def vmware_getavailableserver(host,user,pwd,port=443):
                 name=getVmSwitchedOff(vm)
                 if name:
                     macchine_da_inserire = macchine_da_inserire + name
-    print "ci sono " + str(len(macchine_da_inserire)) + " macchine da inserire nel provisioning:"
+    #print "ci sono " + str(len(macchine_da_inserire)) + " macchine da inserire nel provisioning:"
     macchine_da_inserire.sort()
     #macchine_da_inserire.reverse()
-    for n in macchine_da_inserire:
-        print n,
-    print
+    #for n in macchine_da_inserire:
+    #    print n,
+    #print
     return macchine_da_inserire
 
 def read_config(file):
@@ -603,7 +602,7 @@ def read_config(file):
     for black in config.get('general','blacklist').split(','):
         blacklist.append(black)
     ## TODO: gestire l'errore nel caso in cui manchi un parametro (prevedere un default)
-    conf['general'] = { 'host': config.get('general','host'), 'user': config.get('general','user'), 'pass': config.get('general','pass'), 'brand': config.get('general','brand'), 'puppet_path': config.get('general','puppet_path'), 'puppet_git_path': config.get('general','puppet_git_path'), 'blacklist': blacklist }
+    conf['general'] = { 'host': config.get('general','host'), 'user': config.get('general','user'), 'pass': config.get('general','pass'), 'brand': config.get('general','brand'), 'puppet_path': config.get('general','puppet_path'), 'puppet_git_path': config.get('general','puppet_git_path'), 'blacklist': blacklist , 'temporary_ipaddr': config.get('general','temporary_ipaddr') }
     for brand in conf['general']['brand'].split(','):
         conf[brand]= { 'brand': config.get(brand,'brand'), 'user_fisica': config.get(brand,'user_fisica'), 'user_virtual': config.get(brand,'user_virtual'), 'disk': config.get(brand,'disk'), 'user_per_day': config.get(brand,'user_per_day'), 'wh': config.get(brand,'wh'), 'puppet_template': config.get(brand,'puppet_template'), 'tags': config.get(brand,'tags').split(",") }
     return conf
