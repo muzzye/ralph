@@ -25,7 +25,7 @@ check_macchine_da_inserire(macchine_da_inserire,config['general']['min_macchine'
 
 for k in config:
     if k != 'general':
-        print "\033[1;36;40mtipologia " + k + "\033[1;37;40m"
+        print "\033[1;36;40mtype " + k + "\033[1;37;40m"
         ## prende la lista delle maccchine attive sul provisioning
         active_server=get_active_server(mnt=config[k]['wh'],active='true',tags=config[k]['tags'])
         #print active_server

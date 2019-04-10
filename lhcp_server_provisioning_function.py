@@ -266,7 +266,7 @@ def create_reverse(server,puppet_git_path):
                         zone.write(record)
                     zone.write(str(ip4) + "\t\t\tIN\tPTR\t" + str(server) + ".webapps.net.\n")
                     zone.truncate()
-                    bashCommand = "cd " + puppet_git_path + " && git pull && git add " + relative_zone_file + " && git commit -m 'autocommit reverse for " + str(server) + "' && git push"
+                    bashCommand = "cd " + puppet_git_path + " && git pull && git add " + relative_zone_file + " && git commit -m 'autocommit reverse for " + str(server) + "' && git push >/dev/null"
                     #print bashCommand
                     os.system(bashCommand)
                 return True
@@ -332,14 +332,14 @@ def configure_puppet(vm,puppet_path):
     if os.path.isdir(puppet_path):
         f = "autosign.conf"
 
-        bashCommand = "cd " + puppet_path + " && svn up"
+        bashCommand = "cd " + puppet_path + " && svn up >/dev/null"
         os.system(bashCommand)
 
         f = open(puppet_path + "/" + f,"a")
         f.write("\n" + vm + ".webapps.net\n")
         f.close()
 
-        bashCommand = "cd " + puppet_path + " && svn ci -m 'autoadd " + vm + " to autosign'"
+        bashCommand = "cd " + puppet_path + " && svn ci -m 'autoadd " + vm + " to autosign' >/dev/null"
         os.system(bashCommand)
 
         print "puppet run"
@@ -358,7 +358,7 @@ def configure_naemon(vm,puppet_template,puppet_path):
     if os.path.isdir(puppet_path):
         p = puppet_path + "/modules/naemon/files/naemon/conf.d_register/puwebhosting/"
         conffile = p + "uk_cpanel_hosts.cfg"
-        bashCommand = "cd " + p + " && svn up"
+        bashCommand = "cd " + p + " && svn up >/dev/null"
         os.system(bashCommand)
 
         ## controllo che la macchina non sia gia' sotto puppet
@@ -376,7 +376,7 @@ def configure_naemon(vm,puppet_template,puppet_path):
             f.write("}\n")
             f.close()
 
-            bashCommand = "cd " + p + " && svn ci -m 'autoadd " + vm + " to puppet'"
+            bashCommand = "cd " + p + " && svn ci -m 'autoadd " + vm + " to puppet' >/dev/null"
             os.system(bashCommand)
             time.sleep(5)
 
@@ -541,10 +541,10 @@ def check_macchine_da_inserire(macchine,min_macchine):
         tot_macchine = tot_macchine + " " + n
 
     if len(macchine) < int(min_macchine):
-        print "\033[1;31;40mATTENZIONE ci sono solo " + str(len(macchine)) + " macchine da inserire (" + tot_macchine + "), aprire un task a ct-infra per farsi creare nuove macchine\033[1;37;40m"
+        print "\033[1;31;40mWARNING only " + str(len(macchine)) + " servers to be inserted (" + tot_macchine + "), open a task to ct-infra in order to create new servers\033[1;37;40m"
         return False
     else:
-        print "tranquillo ci sono " + str(len(macchine)) + " macchine da inserire:" + tot_macchine
+        print str(len(macchine)) + " servers to be inserted:" + tot_macchine
         return True
 
 def read_config(file):
@@ -587,72 +587,73 @@ def controlla_macchine(active_server=[],available_server=[],config=[],macchine_d
 
         if res:
             ## se la macchina puo' rimanere nel provisioninig stampa tutto ok e comunica quanti utenti e quanto spazio disco ha la macchina
-            print active_server[i] + " ok, disco libero " + str(dic[active_server[i]]['df']) + "% e " + str(dic[active_server[i]]['users']) + " utenti (disco " + str(dic[active_server[i]]['disktype']) + ") mancano " + str(utenti_residui(dic,config['user_fisica'],config['user_virtual'])) + " utenti prima di togliere la macchina dal provisioning"
+            print active_server[i] + " ok, disk free " + str(dic[active_server[i]]['df']) + "%, users: " + str(dic[active_server[i]]['users']) + " (disk type " + str(dic[active_server[i]]['disktype']) + ") " + str(utenti_residui(dic,config['user_fisica'],config['user_virtual'])) + " users left before removing server from provisioning"
             tot_user += utenti_residui(dic,config['user_fisica'],config['user_virtual'])
         else:
             ## altrimenti se ci sono macchine da attivare nel provisioning la attiva e, se e solo se ci e' riuscito, toglie la macchina piena dal provisioning
             if len(available_server) > 0:
                 if manage_server(list(available_server.keys())[0],"true"):
-                    print "inserita nel provisioning la macchina " + list(available_server.keys())[0]
+                    print "insert " + list(available_server.keys())[0] + " into provisioning"
                     new_server = {}
                     server = available_server.keys()[0]
                     new_server[server] = available_server.pop(server)
                     tot_user += utenti_residui(new_server,config['user_fisica'],config['user_virtual'])
                     if manage_server(active_server[i],"false"):
-                        print "tolta " + active_server[i] + " dal provisioning"
+                        print "remove " + active_server[i] + " from provisioning"
                     else:
-                        print "\033[1;31;40m" + active_server[i] + " da togliere dal provisioning\033[1;37;40m"
+                        print "\033[1;31;40m" + active_server[i] + " to be removed from provisioning\033[1;37;40m"
                 else:
-                    print "\033[1;31;40mnon riesco ad inserire nel provisioning la macchina " + list(available_server())[0] + ", di conseguenza non tolgo la macchina " + active_server[i] + " da togliere dal provisioning: disco libero " + str(dic[active_server[i]]['df']) + "% e " + str(dic[active_server[i]]['users']) + " utenti (disco " + str(dic[active_server[i]]['disktype']) + ")\033[1;37;40m"
+                    print "\033[1;31;40mcant insert into provisioning server " + list(available_server())[0] + ", dont remove server " + active_server[i] + ": disk free " + str(dic[active_server[i]]['df']) + "%, users: " + str(dic[active_server[i]]['users']) + " (disk type " + str(dic[active_server[i]]['disktype']) + ")\033[1;37;40m"
             else:
-                print "\033[1;31;40m" + active_server[i] + " da togliere dal provisioning ma purtroppo non ho macchine di spare da inserire\033[1;37;40m"
+                print "\033[1;31;40m" + active_server[i] + " to be removed from provisioning but i dont have any spare servers to insert\033[1;37;40m"
 
     ## stampa a video le macchine inseribili nel provisioning con la somma degli utenti
     lista_macchine = ""
     if len(available_server) > 0:
         for k in available_server:
             lista_macchine = lista_macchine + "," + k
-    print "macchine con dischi SSD inseribili nel provisioning: " + str(len(available_server)) + " (" + lista_macchine[1:] + ") per un totale di " + str(utenti_residui(available_server,config['user_fisica'],config['user_virtual'])) + " utenti"
+    print "servers already installed: " + str(len(available_server)) + " (" + lista_macchine[1:] + ") for a total of " + str(utenti_residui(available_server,config['user_fisica'],config['user_virtual'])) + " users"
 
     ## calcola i giorni residui in base alle previsioni presenti nel file di configurazione
     tot_user += utenti_residui(available_server,config['user_fisica'],config['user_virtual'])
     day_left = tot_user/int(config['user_per_day'])
     if day_left > int(general_config['day_warning']):
-        print "utenti totali da attivare: " + str(tot_user) + " sufficienti per " + str(day_left) + " giorni"
+        print "total users to be activated: " + str(tot_user) + " ended in " + str(day_left) + " days"
     elif day_left > int(general_config['day_critical']):
-        print "\033[33mutenti totali da attivare: " + str(tot_user) + " sufficienti per " + str(day_left) + " giorni\033[1;37;40m"
+        print "\033[33mtotal users to be activated: " + str(tot_user) + " ended in " + str(day_left) + " days\033[1;37;40m"
     else:
         ## se abbiamo meno di 7 giorni di autonomia prepariamo una nuova macchina
-        print "\033[1;31;40mutenti totali da attivare: " + str(tot_user) + " sufficienti per " + str(day_left) + " giorni\033[1;37;40m"
+        print "\033[1;31;40mtotal users to be activated: " + str(tot_user) + " ended in " + str(day_left) + " days\033[1;37;40m"
         if not general_config['dontinstall']:
             if macchine_da_inserire:
                 macchina_da_inserire = macchine_da_inserire.pop(0)
-                print "metto una macchina nuova nel provisioning (" + macchina_da_inserire + ")"
+                print "add a server into provisioning (" + macchina_da_inserire + ")"
                 content=vmware_connect(general_config['host'],general_config['user'],general_config['pass'])
-                print "accendo la macchina"
+                print "poweron server"
                 vmware_poweron(macchina_da_inserire,content)
-                print "attivo la licenza cloudlinux"
+                print "activate cloudlinux license"
                 activate_cloudlinux_license(macchina_da_inserire)
-                print "creo i record nel dns"
+                print "create DNS records"
                 create_dns_record(macchina_da_inserire)
-                print "configuro la macchina"
+                create_reverse(macchina_da_inserire,general_config['puppet_git_path'])
+                print "configure new server"
                 vmware_configure_server(macchina_da_inserire)
-                print "dormo 60 secondi in attesa del reboot"
+                print "sleep 60 seconds (waiting for server reboot)"
                 time.sleep(60)
-                print "attivo la licenza softaculous e aggiorno softaculous"
+                print "activate Softaculous license and update Softaculous"
                 softaculous_licence(macchina_da_inserire)
-                print "configuro puppet"
+                print "configure puppet"
                 configure_puppet(macchina_da_inserire,general_config['puppet_path'])
-                print "metto la macchina su naemon"
+                print "put server on naemon"
                 configure_naemon(macchina_da_inserire,config['puppet_template'],general_config['puppet_path'])
-                print "dormo 30 secondi"
+                print "sleep 30 seconds"
                 time.sleep(30)
-                print "setto il downtime su naemon"
+                print "set naemon downtime"
                 naemonDowntime(vm=macchina_da_inserire)
-                print "inserisco la macchina nel provisioning"
+                print "insert server into provisioning"
                 insertServerInProvisioning(macchina_da_inserire,config['wh'],config['tags'])
             else:
-                print "\033[1;31;40mATTENZIONE non ho macchine da inserire\033[1;37;40m"
+                print "\033[1;31;40mWARNING i dont have server to power on\033[1;37;40m"
         else:
             print "dontinstall True dont install new servers"
 
