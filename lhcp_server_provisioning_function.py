@@ -345,7 +345,7 @@ def configure_puppet(vm,puppet_path):
         print "puppet run"
         ipaddr = get_ipaddr(vm)
         if ipaddr:
-            bashCommand = "ssh -i chiave_lhcp_provisioning -oStrictHostKeyChecking=no -p 25088 root@" + ipaddr + " 'puppet agent -t >/dev/null; /usr/local/cpanel/3rdparty/bin/php /usr/local/cpanel/whostmgr/docroot/cgi/softaculous/cli.php  --install --cpuser=nagioscheck --cppass=Nagios.User,69 --soft=26 --softdirectory=wp --admin_username=admin --admin_pass=Nagios.User,69 --site_name=\"NagiosCheck Blog\"' >/dev/null"
+            bashCommand = "ssh -i chiave_lhcp_provisioning -oStrictHostKeyChecking=no -p 25088 root@" + ipaddr + " 'puppet agent -t >/dev/null; /usr/local/cpanel/3rdparty/bin/php /usr/local/cpanel/whostmgr/docroot/cgi/softaculous/cli.php  --install --cpuser=nagioscheck --cppass=Nagios.User,69 --soft=26 --softdirectory=wp --admin_username=admin --admin_pass=Nagios.User,69 --site_name=\"NagiosCheck Blog\"' >/dev/null 2>&1"
             os.system(bashCommand)
             return True
     return False
@@ -406,18 +406,18 @@ def vmware_configure_server(vm,temporary_ipaddr='185.2.6.241'):
             file.write(filedata)
 
         ## copia i files sulla macchina (dovrebbero essere sul template)
-        bashCommand = "scp -i chiave_lhcp_provisioning -P 25088 auto_install2.sh root@" + temporary_ipaddr + ":/root/auto_install.sh >/dev/null"
+        bashCommand = "scp -i chiave_lhcp_provisioning -P 25088 auto_install2.sh root@" + temporary_ipaddr + ":/root/auto_install.sh >/dev/null 2>&1"
         os.system(bashCommand)
-        bashCommand = "ssh -i chiave_lhcp_provisioning -oStrictHostKeyChecking=no -p 25088 root@" + temporary_ipaddr + " 'chmod +x /root/auto_install.sh' >/dev/null"
-        os.system(bashCommand)
-
-        bashCommand = "scp -i chiave_lhcp_provisioning -P 25088 estrai_cPanel_id.py root@" + temporary_ipaddr + ":/usr/local/scripts/ >/dev/null"
+        bashCommand = "ssh -i chiave_lhcp_provisioning -oStrictHostKeyChecking=no -p 25088 root@" + temporary_ipaddr + " 'chmod +x /root/auto_install.sh' >/dev/null 2>&1"
         os.system(bashCommand)
 
-        bashCommand = "ssh -i chiave_lhcp_provisioning -oStrictHostKeyChecking=no -p 25088 root@" + temporary_ipaddr + " '/root/auto_install.sh' >/dev/null"
+        bashCommand = "scp -i chiave_lhcp_provisioning -P 25088 estrai_cPanel_id.py root@" + temporary_ipaddr + ":/usr/local/scripts/ >/dev/null 2>&1"
         os.system(bashCommand)
 
-        bashCommand = "ssh -i chiave_lhcp_provisioning -oStrictHostKeyChecking=no -p 25088 root@" + temporary_ipaddr + " 'reboot' > /dev/null"
+        bashCommand = "ssh -i chiave_lhcp_provisioning -oStrictHostKeyChecking=no -p 25088 root@" + temporary_ipaddr + " '/root/auto_install.sh' >/dev/null 2>&1"
+        os.system(bashCommand)
+
+        bashCommand = "ssh -i chiave_lhcp_provisioning -oStrictHostKeyChecking=no -p 25088 root@" + temporary_ipaddr + " 'reboot' > /dev/null 2>&1"
         os.system(bashCommand)
         return True
     else:
@@ -441,7 +441,7 @@ def softaculous_licence(vm):
         bashCommand = "php ./soft2.php"
         os.system(bashCommand)
 
-        bashCommand = "ssh -i chiave_lhcp_provisioning -oStrictHostKeyChecking=no -p 25088 root@" + ipaddr + " '/usr/local/cpanel/3rdparty/bin/php /usr/local/cpanel/whostmgr/docroot/cgi/softaculous/cron.php && /usr/local/cpanel/3rdparty/bin/php /usr/local/cpanel/whostmgr/docroot/cgi/softaculous/cli.php -l' >/dev/null"
+        bashCommand = "ssh -i chiave_lhcp_provisioning -oStrictHostKeyChecking=no -p 25088 root@" + ipaddr + " '/usr/local/cpanel/3rdparty/bin/php /usr/local/cpanel/whostmgr/docroot/cgi/softaculous/cron.php && /usr/local/cpanel/3rdparty/bin/php /usr/local/cpanel/whostmgr/docroot/cgi/softaculous/cli.php -l' >/dev/null 2>&1"
         os.system(bashCommand)
         return True
     else:
