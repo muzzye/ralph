@@ -17,7 +17,7 @@ import ssl
 import re
 import hashlib
 
-def check_macchina(host='', max_user_virtual=300,max_user_fisica=800,perc_free=30):
+def check_macchina(host='', max_user_virtual=300,max_user_fisica=800,perc_free=30,blacklist=[]):
     """ data la macchina e il brand ritorna: """
     """ - True se la macchina puo' restare nel provisioning"""
     """ - False altrimenti"""
@@ -28,6 +28,9 @@ def check_macchina(host='', max_user_virtual=300,max_user_fisica=800,perc_free=3
     dic = {}
 
     if (host == ""):
+        return dic,False
+
+    if host in blacklist:
         return dic,False
 
     max_user = {}
@@ -41,7 +44,7 @@ def check_macchina(host='', max_user_virtual=300,max_user_fisica=800,perc_free=3
     #print request
     res = es.search(index="systems-*", body=request )
 
-    ##print res ## debug only
+    #print res ## debug only
 
     for hit in res['aggregations']['hostname']['buckets']:
         hostname = hit['key']
@@ -81,7 +84,7 @@ def naemonDowntime(vm='',time=900,user='lhcp_autoprovisioning',comment='inserime
     #print "post value " + p
     c.setopt(c.POSTFIELDS, p)
     c.setopt(c.VERBOSE, False)
-    ##c.setopt(pycurl.WRITEFUNCTION, lambda x: None)
+    c.setopt(pycurl.WRITEFUNCTION, lambda x: None)
     try:
         c.perform()
     except:
@@ -160,7 +163,7 @@ def get_ipaddr(vm):
 def get_ipaddr_eth1(vm):
     """ data una macchina ritorna l'indirizzo ip della eth1"""
     hnum = re.findall("\d+$",vm)
-    if hnum[0][1:] > 255:
+    if int(hnum[0][1:]) < 255:
         ip4 = str(int(hnum[0][1:4]))
         ip1 = "172.22."
         ip3 = str(15 + int(hnum[0][0]))
@@ -176,7 +179,6 @@ def cerca_backup():
     """ {'device': u'sdb', 'host': u'lhbk2002.webapps.net', 'perc_used_disk': 1, 'num_lhcp': 0} """
 
     es = Elasticsearch([{'host': '172.22.131.66', 'port': 9200}])
-    #request = '{"aggs": { "hostname": { "terms": { "field": "beat.hostname", "size": 5, "order": { "_count": "desc" } }, "aggs": { "device": { "terms": { "field": "device", "size": 5, "order": { "_count": "desc" } }, "aggs": { "num_lhcp": { "terms": {"field": "num_lhcp", "size": 5, "order": { "_count": "desc" } }, "aggs": { "perc_used_disk": { "terms": { "field": "perc_used_disk", "size": 5, "order": { "_count": "desc" } } } } } } } } } }, "size": 0, "version": true, "_source": { "excludes": [] }, "stored_fields": [ "*" ], "script_fields": {}, "docvalue_fields": [ { "field": "@timestamp", "format": "date_time"}],"query": {"bool": {"must": [{"query_string": {"query": "perc_used_disk: [ 0 TO 75 ] AND num_lhcp: [ 0 TO 10]"}},{"match_all": {}},{"range": {"@timestamp": {"gte": "now-140m","lte": "now"}}}],"filter": [],"should": [],"must_not": []}},"highlight": {"pre_tags": ["@kibana-highlighted-field@"],"post_tags": ["@/kibana-highlighted-field@"],"fields": {"*": {}} }}'
     request = '{ "sort": [ { "perc_used_disk": { "order": "asc" } }, { "num_lhcp": { "order": "asc" } } ],"_source": ["beat.hostname","device","num_lhcp","perc_used_disk"],"query": {"bool": {"must": [{"query_string": {"query": "perc_used_disk: [ 0 TO 65 ] AND num_lhcp: [ 0 TO 9]"}},{"match_all": {}},{"range": {"@timestamp": {"gte": "now-140m","lte": "now"}}}]}}}'
     #print request
     res = es.search(index="lhbk-*", body=request )
@@ -192,7 +194,6 @@ def cerca_backup():
         perc_used_disk = hit['_source']['perc_used_disk']
         arr.append ({ 'host': host, 'device': device, 'num_lhcp': num_lhcp, 'perc_used_disk': perc_used_disk })
 
-    print arr
     if len(arr) > 0:
         return arr.pop(0)
     return []
@@ -206,7 +207,7 @@ def valida_macchine(server=[],max_user_virtual=300,max_user_fisica=800,perc_free
     for macchina in server:
         if not macchina in blacklist:
             tmp_ssd = {}
-            tmp_ssd,res = check_macchina(macchina,max_user_virtual,max_user_fisica,perc_free)
+            tmp_ssd,res = check_macchina(macchina,max_user_virtual,max_user_fisica,perc_free,blacklist)
             if res:
                 prov_ssd.update(tmp_ssd)
 
@@ -266,7 +267,7 @@ def create_reverse(server,puppet_git_path):
                     zone.write(str(ip4) + "\t\t\tIN\tPTR\t" + str(server) + ".webapps.net.\n")
                     zone.truncate()
                     bashCommand = "cd " + puppet_git_path + " && git pull && git add " + relative_zone_file + " && git commit -m 'autocommit reverse for " + str(server) + "' && git push"
-                    print bashCommand
+                    #print bashCommand
                     os.system(bashCommand)
                 return True
             else:
@@ -274,7 +275,6 @@ def create_reverse(server,puppet_git_path):
                 return False
     else:
         return False
-    return False
 
 def check_server (host):
     """data una macchina ritorna True se e' attiva nel provisioning, False se non lo e'"""
@@ -345,7 +345,7 @@ def configure_puppet(vm,puppet_path):
         print "puppet run"
         ipaddr = get_ipaddr(vm)
         if ipaddr:
-            bashCommand = "ssh -oStrictHostKeyChecking=no -p 25088 root@" + ipaddr + " 'puppet agent -t'"
+            bashCommand = "ssh -i chiave_lhcp_provisioning -oStrictHostKeyChecking=no -p 25088 root@" + ipaddr + " 'puppet agent -t >/dev/null; /usr/local/cpanel/3rdparty/bin/php /usr/local/cpanel/whostmgr/docroot/cgi/softaculous/cli.php  --install --cpuser=nagioscheck --cppass=Nagios.User,69 --soft=26 --softdirectory=wp --admin_username=admin --admin_pass=Nagios.User,69 --site_name=\"NagiosCheck Blog\"' >/dev/null"
             os.system(bashCommand)
             return True
     return False
@@ -364,6 +364,7 @@ def configure_naemon(vm,puppet_template,puppet_path):
         ## controllo che la macchina non sia gia' sotto puppet
         if vm in open(conffile).read():
             print "macchina " + vm + " gia' presente su puppet"
+            return False
         else:
             f = open(conffile,"a")
 
@@ -379,10 +380,9 @@ def configure_naemon(vm,puppet_template,puppet_path):
             os.system(bashCommand)
             time.sleep(5)
 
-        bashCommand = "ssh root@anael01.it.dadainternal 'puppet agent -t ; /usr/local/cpanel/3rdparty/bin/php /usr/local/cpanel/whostmgr/docroot/cgi/softaculous/cli.php  --install --cpuser=nagioscheck --cppass=Nagios.User,69 --soft=26 --softdirectory=wp --admin_username=admin --admin_pass=Nagios.User,69 --site_name=\"NagiosCheck Blog\"'"
-        os.system(bashCommand)
-        return True
-    return False
+            bashCommand = "ssh root@anael01.it.dadainternal 'puppet agent -t >/dev/null'"
+            os.system(bashCommand)
+            return True
 
 def vmware_configure_server(vm,temporary_ipaddr='185.2.6.241'):
     """ data una macchina la configura """
@@ -406,18 +406,18 @@ def vmware_configure_server(vm,temporary_ipaddr='185.2.6.241'):
             file.write(filedata)
 
         ## copia i files sulla macchina (dovrebbero essere sul template)
-        bashCommand = "scp -P 25088 auto_install2.sh root@" + temporary_ipaddr + ":/root/auto_install.sh"
+        bashCommand = "scp -i chiave_lhcp_provisioning -P 25088 auto_install2.sh root@" + temporary_ipaddr + ":/root/auto_install.sh >/dev/null"
         os.system(bashCommand)
-        bashCommand = "ssh -oStrictHostKeyChecking=no -p 25088 root@" + temporary_ipaddr + " 'chmod +x /root/auto_install.sh'"
-        os.system(bashCommand)
-
-        bashCommand = "scp -P 25088 estrai_cPanel_id.py root@" + temporary_ipaddr + ":/usr/local/scripts/"
+        bashCommand = "ssh -i chiave_lhcp_provisioning -oStrictHostKeyChecking=no -p 25088 root@" + temporary_ipaddr + " 'chmod +x /root/auto_install.sh' >/dev/null"
         os.system(bashCommand)
 
-        bashCommand = "ssh -oStrictHostKeyChecking=no -p 25088 root@" + temporary_ipaddr + " '/root/auto_install.sh'"
+        bashCommand = "scp -i chiave_lhcp_provisioning -P 25088 estrai_cPanel_id.py root@" + temporary_ipaddr + ":/usr/local/scripts/ >/dev/null"
         os.system(bashCommand)
 
-        bashCommand = "ssh -oStrictHostKeyChecking=no -p 25088 root@" + temporary_ipaddr + " 'reboot'"
+        bashCommand = "ssh -i chiave_lhcp_provisioning -oStrictHostKeyChecking=no -p 25088 root@" + temporary_ipaddr + " '/root/auto_install.sh' >/dev/null"
+        os.system(bashCommand)
+
+        bashCommand = "ssh -i chiave_lhcp_provisioning -oStrictHostKeyChecking=no -p 25088 root@" + temporary_ipaddr + " 'reboot' > /dev/null"
         os.system(bashCommand)
         return True
     else:
@@ -441,7 +441,7 @@ def softaculous_licence(vm):
         bashCommand = "php ./soft2.php"
         os.system(bashCommand)
 
-        bashCommand = "ssh -oStrictHostKeyChecking=no -p 25088 root@" + ipaddr + " '/usr/local/cpanel/3rdparty/bin/php /usr/local/cpanel/whostmgr/docroot/cgi/softaculous/cron.php && /usr/local/cpanel/3rdparty/bin/php /usr/local/cpanel/whostmgr/docroot/cgi/softaculous/cli.php -l'"
+        bashCommand = "ssh -i chiave_lhcp_provisioning -oStrictHostKeyChecking=no -p 25088 root@" + ipaddr + " '/usr/local/cpanel/3rdparty/bin/php /usr/local/cpanel/whostmgr/docroot/cgi/softaculous/cron.php && /usr/local/cpanel/3rdparty/bin/php /usr/local/cpanel/whostmgr/docroot/cgi/softaculous/cli.php -l' >/dev/null"
         os.system(bashCommand)
         return True
     else:
@@ -530,13 +530,22 @@ def vmware_getavailableserver(host,user,pwd,port=443):
                 name=getVmSwitchedOff(vm)
                 if name:
                     macchine_da_inserire = macchine_da_inserire + name
-    #print "ci sono " + str(len(macchine_da_inserire)) + " macchine da inserire nel provisioning:"
     macchine_da_inserire.sort()
     #macchine_da_inserire.reverse()
-    #for n in macchine_da_inserire:
-    #    print n,
-    #print
     return macchine_da_inserire
+
+def check_macchine_da_inserire(macchine,min_macchine):
+    """ controlla se le macchine da inserire siano inferiori al valore nella configurazione"""
+    tot_macchine = ""
+    for n in macchine:
+        tot_macchine = tot_macchine + " " + n
+
+    if len(macchine) < int(min_macchine):
+        print "\033[1;31;40mATTENZIONE ci sono solo " + str(len(macchine)) + " macchine da inserire (" + tot_macchine + "), aprire un task a ct-infra per farsi creare nuove macchine\033[1;37;40m"
+        return False
+    else:
+        print "tranquillo ci sono " + str(len(macchine)) + " macchine da inserire:" + tot_macchine
+        return True
 
 def read_config(file):
     """ legge da un file di configurazione e ritorna un dizionario con le configurazioni """
@@ -550,7 +559,7 @@ def read_config(file):
     for black in config.get('general','blacklist').split(','):
         blacklist.append(black)
     ## TODO: gestire l'errore nel caso in cui manchi un parametro (prevedere un default)
-    conf['general'] = { 'host': config.get('general','host'), 'user': config.get('general','user'), 'pass': config.get('general','pass'), 'brand': config.get('general','brand'), 'puppet_path': config.get('general','puppet_path'), 'puppet_git_path': config.get('general','puppet_git_path'), 'blacklist': blacklist , 'temporary_ipaddr': config.get('general','temporary_ipaddr') }
+    conf['general'] = { 'host': config.get('general','host'), 'user': config.get('general','user'), 'pass': config.get('general','pass'), 'brand': config.get('general','brand'), 'puppet_path': config.get('general','puppet_path'), 'puppet_git_path': config.get('general','puppet_git_path'), 'blacklist': blacklist , 'temporary_ipaddr': config.get('general','temporary_ipaddr'), 'min_macchine': config.get('general','min_macchine'), 'day_warning': config.get('general','day_warning'), 'day_critical': config.get('general','day_critical'), 'dontinstall': config.getboolean('general','dontinstall') }
     for brand in conf['general']['brand'].split(','):
         conf[brand]= { 'brand': config.get(brand,'brand'), 'user_fisica': config.get(brand,'user_fisica'), 'user_virtual': config.get(brand,'user_virtual'), 'disk': config.get(brand,'disk'), 'user_per_day': config.get(brand,'user_per_day'), 'wh': config.get(brand,'wh'), 'puppet_template': config.get(brand,'puppet_template'), 'tags': config.get(brand,'tags').split(",") }
     return conf
@@ -563,18 +572,21 @@ def controlla_macchine(active_server=[],available_server=[],config=[],macchine_d
     """ in caso affermativo prima inserisce una nuova macchina nel provisioning """
     """ e, se e solo se la nuova macchina e' stata aggiunta nel provisioning """
     """ provvede a rimuovere la vecchia macchina nel provisioning """
+    """ ritorna un array contenente le macchine ancora da inserire nel provisioning """
 
     tot_user = 0
 
     ## per ogni macchina attiva nel provisioning
     for i in range(len(active_server)):
         ## controlla che possa rimanere ancora nel provisioning
-        dic,res=check_macchina(host=active_server[i],max_user_virtual=config['user_virtual'],max_user_fisica=config['user_fisica'],perc_free=config['disk'])
+        dic,res=check_macchina(host=active_server[i],max_user_virtual=config['user_virtual'],max_user_fisica=config['user_fisica'],perc_free=config['disk'],blacklist=general_config['blacklist'])
 
         #print available_server
         #print dic
         #print res
+
         if res:
+            ## se la macchina puo' rimanere nel provisioninig stampa tutto ok e comunica quanti utenti e quanto spazio disco ha la macchina
             print active_server[i] + " ok, disco libero " + str(dic[active_server[i]]['df']) + "% e " + str(dic[active_server[i]]['users']) + " utenti (disco " + str(dic[active_server[i]]['disktype']) + ") mancano " + str(utenti_residui(dic,config['user_fisica'],config['user_virtual'])) + " utenti prima di togliere la macchina dal provisioning"
             tot_user += utenti_residui(dic,config['user_fisica'],config['user_virtual'])
         else:
@@ -605,35 +617,43 @@ def controlla_macchine(active_server=[],available_server=[],config=[],macchine_d
     ## calcola i giorni residui in base alle previsioni presenti nel file di configurazione
     tot_user += utenti_residui(available_server,config['user_fisica'],config['user_virtual'])
     day_left = tot_user/int(config['user_per_day'])
-    if day_left > 14:
+    if day_left > int(general_config['day_warning']):
         print "utenti totali da attivare: " + str(tot_user) + " sufficienti per " + str(day_left) + " giorni"
-    elif day_left > 7:
+    elif day_left > int(general_config['day_critical']):
         print "\033[33mutenti totali da attivare: " + str(tot_user) + " sufficienti per " + str(day_left) + " giorni\033[1;37;40m"
     else:
         ## se abbiamo meno di 7 giorni di autonomia prepariamo una nuova macchina
         print "\033[1;31;40mutenti totali da attivare: " + str(tot_user) + " sufficienti per " + str(day_left) + " giorni\033[1;37;40m"
-        if macchine_da_inserire:
-            macchina_da_inserire = macchine_da_inserire.pop(0)
-            print "metto una macchina nuova nel provisioning (" + macchina_da_inserire + ")"
-            content=vmware_connect(general_config['host'],general_config['user'],general_config['pass'])
-            vmware_poweron(macchina_da_inserire,content)
-            activate_cloudlinux_license(macchina_da_inserire)
-            create_dns_record(macchina_da_inserire)
-            time.sleep(60)
-            vmware_configure_server(macchina_da_inserire)
-            time.sleep(60)
-            softaculous_licence(macchina_da_inserire)
-            configure_puppet(macchina_da_inserire,general_config['puppet_path'])
-            configure_naemon(macchina_da_inserire,config['puppet_template'],general_config['puppet_path'])
-            time.sleep(30)
-            naemonDowntime(vm=macchina_da_inserire)
-            insertServerInProvisioning(macchina_da_inserire,config['wh'],config['tags'])
+        if not general_config['dontinstall']:
+            if macchine_da_inserire:
+                macchina_da_inserire = macchine_da_inserire.pop(0)
+                print "metto una macchina nuova nel provisioning (" + macchina_da_inserire + ")"
+                content=vmware_connect(general_config['host'],general_config['user'],general_config['pass'])
+                print "accendo la macchina"
+                vmware_poweron(macchina_da_inserire,content)
+                print "attivo la licenza cloudlinux"
+                activate_cloudlinux_license(macchina_da_inserire)
+                print "creo i record nel dns"
+                create_dns_record(macchina_da_inserire)
+                print "configuro la macchina"
+                vmware_configure_server(macchina_da_inserire)
+                print "dormo 60 secondi in attesa del reboot"
+                time.sleep(60)
+                print "attivo la licenza softaculous e aggiorno softaculous"
+                softaculous_licence(macchina_da_inserire)
+                print "configuro puppet"
+                configure_puppet(macchina_da_inserire,general_config['puppet_path'])
+                print "metto la macchina su naemon"
+                configure_naemon(macchina_da_inserire,config['puppet_template'],general_config['puppet_path'])
+                print "dormo 30 secondi"
+                time.sleep(30)
+                print "setto il downtime su naemon"
+                naemonDowntime(vm=macchina_da_inserire)
+                print "inserisco la macchina nel provisioning"
+                insertServerInProvisioning(macchina_da_inserire,config['wh'],config['tags'])
+            else:
+                print "\033[1;31;40mATTENZIONE non ho macchine da inserire\033[1;37;40m"
         else:
-            print "\033[1;31;40mATTENZIONE non ho macchine da inserire\033[1;37;40m"
+            print "dontinstall True dont install new servers"
 
-    ## TODO: controllo per aprire il task a infra per la creazione di nuove macchine
-    if len(macchine_da_inserire) < 5:
-        print "\033[1;31;40mATTENZIONE ci sono solo " + str(len(macchine_da_inserire)) + " macchine da inserire, aprire un task a ct-infra per farsi creare nuove macchine\033[1;37;40m"
-    else:
-        print "tranquillo ci sono " + str(len(macchine_da_inserire)) + " macchine da inserire"
-    ## TODO: licenze cpanel (mail a chirag)
+    return macchine_da_inserire

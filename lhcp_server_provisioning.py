@@ -21,6 +21,7 @@ config = read_config('lhcp_server_provisioning.conf')
 #print config
 
 macchine_da_inserire = vmware_getavailableserver(config['general']['host'],config['general']['user'],config['general']['pass'])
+check_macchine_da_inserire(macchine_da_inserire,config['general']['min_macchine'])
 
 for k in config:
     if k != 'general':
@@ -36,4 +37,7 @@ for k in config:
         #print prov_ssd
         ## controlla se le macchine attive possono rimanere nel provisioning, in caso negativo mette una nuova macchina nel provisioning e toglie la vecchia
         ## se necessario installa una nuova macchina lhcp
-        controlla_macchine(active_server=active_server,available_server=prov_ssd,config=config[k],macchine_da_inserire=macchine_da_inserire,general_config=config['general'])
+        macchine_da_inserire = controlla_macchine(active_server=active_server,available_server=prov_ssd,config=config[k],macchine_da_inserire=macchine_da_inserire,general_config=config['general'])
+
+## TODO ritornare
+check_macchine_da_inserire(macchine_da_inserire,config['general']['min_macchine'])
