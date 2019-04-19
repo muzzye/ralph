@@ -172,6 +172,30 @@ def get_ipaddr_eth1(vm):
     else:
         return False
 
+def get_all_backup():
+    """ cerca la macchina lhbk e il device con meno risorse in termine di: """
+    """ - numero lhcp che fanno backup sul device; - spazio libero sul device. """
+    """ restituisce un dizionario contenente device, host, perc_used_disk, num_lhcp: """
+    """ {'device': u'sdb', 'host': u'lhbk2002.webapps.net', 'perc_used_disk': 1, 'num_lhcp': 0} """
+
+    es = Elasticsearch([{'host': '172.22.131.66', 'port': 9200}])
+    request = '{ "sort": [ { "perc_used_disk": { "order": "asc" } }, { "num_lhcp": { "order": "asc" } } ],"_source": ["beat.hostname","device","num_lhcp","perc_used_disk"],"query": {"bool": {"must": [{"query_string": {"query": "perc_used_disk: [ 0 TO 65 ] AND num_lhcp: [ 0 TO 9]"}},{"match_all": {}},{"range": {"@timestamp": {"gte": "now-140m","lte": "now"}}}]}}}'
+    #print request
+    res = es.search(index="lhbk-*", body=request )
+
+    #print res['hits']['hits'] ## debug only
+    arr=[]
+    for hit in res['hits']['hits']:
+        #print hit['_source']
+        # {u'beat': {u'hostname': u'lhbk1022.webapps.net'}, u'device': u'/dev/sdb1', u'perc_used_disk': u'1', u'num_lhcp': u'0'}
+        host = hit['_source']['beat']['hostname']
+        device = hit['_source']['device']
+        num_lhcp = hit['_source']['num_lhcp']
+        perc_used_disk = hit['_source']['perc_used_disk']
+        arr.append ({ 'host': host, 'device': device, 'num_lhcp': num_lhcp, 'perc_used_disk': perc_used_disk })
+
+    return arr
+
 def cerca_backup():
     """ cerca la macchina lhbk e il device con meno risorse in termine di: """
     """ - numero lhcp che fanno backup sul device; - spazio libero sul device. """
@@ -534,17 +558,18 @@ def vmware_getavailableserver(host,user,pwd,port=443):
     #macchine_da_inserire.reverse()
     return macchine_da_inserire
 
-def check_macchine_da_inserire(macchine,min_macchine):
+def check_macchine_da_inserire(macchine,min_macchine,verbose=True):
     """ controlla se le macchine da inserire siano inferiori al valore nella configurazione"""
     tot_macchine = ""
     for n in macchine:
         tot_macchine = tot_macchine + " " + n
 
     if len(macchine) < int(min_macchine):
-        print "\033[1;31;40mWARNING only " + str(len(macchine)) + " servers to be inserted (" + tot_macchine + "), open a task to ct-infra in order to create new servers\033[1;37;40m"
+        print "\033[1;31;40mCRITICAL only " + str(len(macchine)) + " servers to be inserted (" + tot_macchine + "), open a task to ct-infra in order to create new servers\033[1;37;40m"
         return False
     else:
-        print str(len(macchine)) + " servers to be inserted:" + tot_macchine
+        if verbose:
+            print str(len(macchine)) + " servers to be inserted:" + tot_macchine
         return True
 
 def read_config(file):
@@ -559,7 +584,7 @@ def read_config(file):
     for black in config.get('general','blacklist').split(','):
         blacklist.append(black)
     ## TODO: gestire l'errore nel caso in cui manchi un parametro (prevedere un default)
-    conf['general'] = { 'host': config.get('general','host'), 'user': config.get('general','user'), 'pass': config.get('general','pass'), 'brand': config.get('general','brand'), 'puppet_path': config.get('general','puppet_path'), 'puppet_git_path': config.get('general','puppet_git_path'), 'blacklist': blacklist , 'temporary_ipaddr': config.get('general','temporary_ipaddr'), 'min_macchine': config.get('general','min_macchine'), 'day_warning': config.get('general','day_warning'), 'day_critical': config.get('general','day_critical'), 'dontinstall': config.getboolean('general','dontinstall') }
+    conf['general'] = { 'host': config.get('general','host'), 'user': config.get('general','user'), 'pass': config.get('general','pass'), 'brand': config.get('general','brand'), 'puppet_path': config.get('general','puppet_path'), 'puppet_git_path': config.get('general','puppet_git_path'), 'blacklist': blacklist , 'temporary_ipaddr': config.get('general','temporary_ipaddr'), 'min_macchine': config.get('general','min_macchine'), 'day_warning': config.get('general','day_warning'), 'day_critical': config.get('general','day_critical'), 'dontinstall': config.getboolean('general','dontinstall'), 'verbose': config.getboolean('general','verbose') }
     for brand in conf['general']['brand'].split(','):
         conf[brand]= { 'brand': config.get(brand,'brand'), 'user_fisica': config.get(brand,'user_fisica'), 'user_virtual': config.get(brand,'user_virtual'), 'disk': config.get(brand,'disk'), 'user_per_day': config.get(brand,'user_per_day'), 'wh': config.get(brand,'wh'), 'puppet_template': config.get(brand,'puppet_template'), 'tags': config.get(brand,'tags').split(",") }
     return conf
@@ -587,7 +612,8 @@ def controlla_macchine(active_server=[],available_server=[],config=[],macchine_d
 
         if res:
             ## se la macchina puo' rimanere nel provisioninig stampa tutto ok e comunica quanti utenti e quanto spazio disco ha la macchina
-            print active_server[i] + " ok, disk free " + str(dic[active_server[i]]['df']) + "%, users: " + str(dic[active_server[i]]['users']) + " (disk type " + str(dic[active_server[i]]['disktype']) + ") " + str(utenti_residui(dic,config['user_fisica'],config['user_virtual'])) + " users left before removing server from provisioning"
+            if general_config['verbose']:
+                print active_server[i] + " ok, disk free " + str(dic[active_server[i]]['df']) + "%, users: " + str(dic[active_server[i]]['users']) + " (disk type " + str(dic[active_server[i]]['disktype']) + ") " + str(utenti_residui(dic,config['user_fisica'],config['user_virtual'])) + " users left before removing server from provisioning"
             tot_user += utenti_residui(dic,config['user_fisica'],config['user_virtual'])
         else:
             ## altrimenti se ci sono macchine da attivare nel provisioning la attiva e, se e solo se ci e' riuscito, toglie la macchina piena dal provisioning
@@ -612,15 +638,18 @@ def controlla_macchine(active_server=[],available_server=[],config=[],macchine_d
     if len(available_server) > 0:
         for k in available_server:
             lista_macchine = lista_macchine + "," + k
-    print "servers already installed: " + str(len(available_server)) + " (" + lista_macchine[1:] + ") for a total of " + str(utenti_residui(available_server,config['user_fisica'],config['user_virtual'])) + " users"
+    if general_config['verbose']:
+        print "servers already installed: " + str(len(available_server)) + " (" + lista_macchine[1:] + ") for a total of " + str(utenti_residui(available_server,config['user_fisica'],config['user_virtual'])) + " users"
 
     ## calcola i giorni residui in base alle previsioni presenti nel file di configurazione
     tot_user += utenti_residui(available_server,config['user_fisica'],config['user_virtual'])
     day_left = tot_user/int(config['user_per_day'])
     if day_left > int(general_config['day_warning']):
-        print "total users to be activated: " + str(tot_user) + " ended in " + str(day_left) + " days"
+        if general_config['verbose']:
+            print "total users to be activated: " + str(tot_user) + " ended in " + str(day_left) + " days"
     elif day_left > int(general_config['day_critical']):
-        print "\033[33mtotal users to be activated: " + str(tot_user) + " ended in " + str(day_left) + " days\033[1;37;40m"
+        if general_config['verbose']:
+            print "\033[33mtotal users to be activated: " + str(tot_user) + " ended in " + str(day_left) + " days\033[1;37;40m"
     else:
         ## se abbiamo meno di 7 giorni di autonomia prepariamo una nuova macchina
         print "\033[1;31;40mtotal users to be activated: " + str(tot_user) + " ended in " + str(day_left) + " days\033[1;37;40m"
@@ -653,7 +682,7 @@ def controlla_macchine(active_server=[],available_server=[],config=[],macchine_d
                 print "insert server into provisioning"
                 insertServerInProvisioning(macchina_da_inserire,config['wh'],config['tags'])
             else:
-                print "\033[1;31;40mWARNING i dont have server to power on\033[1;37;40m"
+                print "\033[1;31;40mCRITICAL i dont have server to power on\033[1;37;40m"
         else:
             print "dontinstall True dont install new servers"
 

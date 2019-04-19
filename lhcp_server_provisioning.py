@@ -21,11 +21,12 @@ config = read_config('lhcp_server_provisioning.conf')
 #print config
 
 macchine_da_inserire = vmware_getavailableserver(config['general']['host'],config['general']['user'],config['general']['pass'])
-check_macchine_da_inserire(macchine_da_inserire,config['general']['min_macchine'])
+check_macchine_da_inserire(macchine_da_inserire,config['general']['min_macchine'],config['general']['verbose'])
 
 for k in config:
     if k != 'general':
-        print "\033[1;36;40mtype " + k + "\033[1;37;40m"
+        if config['general']['verbose']:
+            print "\033[1;36;40mtype " + k + " (user per day: "+ config[k]['user_per_day'] + ")\033[1;37;40m"
         ## prende la lista delle maccchine attive sul provisioning
         active_server=get_active_server(mnt=config[k]['wh'],active='true',tags=config[k]['tags'])
         #print active_server
@@ -39,5 +40,4 @@ for k in config:
         ## se necessario installa una nuova macchina lhcp
         macchine_da_inserire = controlla_macchine(active_server=active_server,available_server=prov_ssd,config=config[k],macchine_da_inserire=macchine_da_inserire,general_config=config['general'])
 
-## TODO ritornare
-check_macchine_da_inserire(macchine_da_inserire,config['general']['min_macchine'])
+check_macchine_da_inserire(macchine_da_inserire,config['general']['min_macchine'],config['general']['verbose'])
