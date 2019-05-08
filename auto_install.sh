@@ -15,6 +15,7 @@ HOSTNAME_LOCK_FILE="/var/cpanel/.application-locks/UpdateHostname"
 [ -f ${HOSTNAME_LOCK_FILE} ] && rm -rf ${HOSTNAME_LOCK_FILE}
 /usr/local/cpanel/bin/set_hostname ${HOSTNAME}
 
+
 ## ip addr
 sed -i "s/^IPADDR=\(.*\)/IPADDR=${IPADDR}/g" /etc/sysconfig/network-scripts/ifcfg-eth0
 sed -i "s/^IPADDR=\(.*\)/IPADDR=${IPADDR2}/g" /etc/sysconfig/network-scripts/ifcfg-eth1
@@ -22,6 +23,7 @@ echo "${IPADDR}" > /etc/ips
 echo "${IPADDR}" > /var/cpanel/mainip
 sed -i "/lhcpclone/d" /etc/hosts
 sed -i "/lhcp2042/d" /etc/hosts
+sed -i "/185\.2\.6\.242/d" /etc/hosts
 echo -e "${IPADDR}\t\t${HOSTNAME} ${HOSTNAME%%.*}" >> /etc/hosts
 
 ## rimozione file inutili
@@ -41,8 +43,9 @@ chmod +x /usr/local/scripts/estrai_cPanel_id.py
 /usr/local/scripts/estrai_cPanel_id.py ${HOSTNAME}
 /usr/local/cpanel/scripts/install_plugin r1soft-cpanel-plugin-2.0 --theme paper_lantern
 
-## registrazione cloudlinux
-/usr/sbin/clnreg_ks --force
+## registrazione cloudlinux (sposto queste 2 operazioni dopo il reboot quando il server ha il nuovo indirizzo ip)
+#rm -rf /var/lve/lveinfo.ver
+#/usr/sbin/clnreg_ks --force
 
 ## deploy cic
 puppi deploy cpanel-instance-client
