@@ -11,8 +11,7 @@ hostname = socket.gethostname()
 
 configfile = '/etc/r1soft.ini'
 file_path = '/root/r1soft-cpanel-plugin-2.0/r1redirect.php'
-#dst_path  = '/usr/local/cpanel/base/frontend/paper_lantern/'
-dst_path  = '/tmp'
+dst_path  = '/usr/local/cpanel/base/frontend/paper_lantern/'
 config = ConfigParser.ConfigParser()
 config.read(configfile)
 

@@ -17,7 +17,7 @@ import re
 import hashlib
 from lhcp_server_provisioning_function import *
 
-config = read_config('lhcp_server_provisioning.conf')
+config = read_config(os.path.dirname(__file__) + '/lhcp_server_provisioning.conf')
 #print config
 
 macchine_da_inserire = vmware_getavailableserver(config['general']['host'],config['general']['user'],config['general']['pass'])

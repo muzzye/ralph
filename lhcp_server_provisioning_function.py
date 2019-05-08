@@ -369,6 +369,9 @@ def configure_puppet(vm,puppet_path):
         print "puppet run"
         ipaddr = get_ipaddr(vm)
         if ipaddr:
+            ## cloudlinux license
+            bashCommand = "ssh -i chiave_lhcp_provisioning -oStrictHostKeyChecking=no -p 25088 root@" + ipaddr + " 'rm -rf /var/lve/lveinfo.ver && /usr/sbin/clnreg_ks --force'"
+            os.system(bashCommand)
             bashCommand = "ssh -i chiave_lhcp_provisioning -oStrictHostKeyChecking=no -p 25088 root@" + ipaddr + " 'puppet agent -t >/dev/null; /usr/local/cpanel/3rdparty/bin/php /usr/local/cpanel/whostmgr/docroot/cgi/softaculous/cli.php  --install --cpuser=nagioscheck --cppass=Nagios.User,69 --soft=26 --softdirectory=wp --admin_username=admin --admin_pass=Nagios.User,69 --site_name=\"NagiosCheck Blog\" ; /usr/local/scripts/kibana_systems' >/dev/null 2>&1"
             os.system(bashCommand)
             return True

@@ -20,7 +20,10 @@ from lhcp_server_provisioning_function import *
 #print serial_update("2018010201")
 #print serial_update("2018041001")
 #print serial_update("2018041003")
-#sys.exit(0)
+backup=get_all_backup()
+for arr in backup:
+    print arr
+sys.exit(0)
 config = read_config('lhcp_server_provisioning.conf')
 
 
