@@ -43,6 +43,10 @@ chmod +x /usr/local/scripts/estrai_cPanel_id.py
 /usr/local/scripts/estrai_cPanel_id.py ${HOSTNAME}
 /usr/local/cpanel/scripts/install_plugin r1soft-cpanel-plugin-2.0 --theme paper_lantern
 
+## fix softaculous
+mkdir /var/softtmp
+chmod 0777 /var/softtmp
+
 ## registrazione cloudlinux (sposto queste 2 operazioni dopo il reboot quando il server ha il nuovo indirizzo ip)
 #rm -rf /var/lve/lveinfo.ver
 #/usr/sbin/clnreg_ks --force
