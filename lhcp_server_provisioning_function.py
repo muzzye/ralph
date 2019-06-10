@@ -509,7 +509,7 @@ def softaculous_licence(vm):
         bashCommand = "php ./soft2.php"
         os.system(bashCommand)
 
-        bashCommand = "ssh -i chiave_lhcp_provisioning -oStrictHostKeyChecking=no -p 25088 root@" + ipaddr + " '/usr/local/cpanel/3rdparty/bin/php /usr/local/cpanel/whostmgr/docroot/cgi/softaculous/cron.php && /usr/local/cpanel/3rdparty/bin/php /usr/local/cpanel/whostmgr/docroot/cgi/softaculous/cli.php -l' >/dev/null 2>&1"
+        bashCommand = "ssh -i chiave_lhcp_provisioning -oStrictHostKeyChecking=no -p 25088 root@" + ipaddr + " '/usr/local/cpanel/3rdparty/bin/php /usr/local/cpanel/whostmgr/docroot/cgi/softaculous/cron.php && /usr/local/cpanel/3rdparty/bin/php /usr/local/cpanel/whostmgr/docroot/cgi/softaculous/cli.php -l && mkdir /var/softtmp && chmod 0777 /var/softtmp' >/dev/null 2>&1"
         os.system(bashCommand)
         return True
     else:
@@ -732,6 +732,8 @@ def controlla_macchine(active_server=[],available_server=[],config=[],macchine_d
                 print "create DNS records"
                 create_dns_record(macchina_da_inserire['name'])
                 create_reverse(macchina_da_inserire['name'],general_config['puppet_git_path'])
+                print "sleep 60 seconds (waiting for server poweron)"
+                time.sleep(60)
                 print "configure new server"
                 configure_server(vm=macchina_da_inserire['name'],temporary_ipaddr=macchina_da_inserire['temporary_ipaddr'],server_farm=macchina_da_inserire['server_farm'])
                 print "sleep 60 seconds (waiting for server reboot)"
