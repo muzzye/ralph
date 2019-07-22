@@ -18,13 +18,11 @@ import hashlib
 from lhcp_server_provisioning_function import *
 
 config = read_config(os.path.dirname(__file__) + '/lhcp_server_provisioning.conf')
-#print config
+macchine_da_inserire = {}
 
-macchine_da_inserire = []
-for hyp_sf in config['general']['hypervisor_serverfarm'].split(','):
-    macchine_da_inserire = macchine_da_inserire + getAvailableServer(hyp_type=config[hyp_sf]['type'],host=config[hyp_sf]['host'],user=config[hyp_sf]['user'],passwd=config[hyp_sf]['pass'],server_farm=config[hyp_sf]['server_farm'],temporary_ipaddr=config[hyp_sf]['temporary_ipaddr'])
-
-check_macchine_da_inserire(macchine_da_inserire,config['general']['min_macchine'],config['general']['verbose'])
+for hyp_sf in config['general']['hypervisor_serverfarm']:
+    macchine_da_inserire[hyp_sf] = getAvailableServer(hyp_type=config[hyp_sf]['type'],host=config[hyp_sf]['host'],user=config[hyp_sf]['user'],passwd=config[hyp_sf]['pass'],server_farm=config[hyp_sf]['server_farm'],temporary_ipaddr=config[hyp_sf]['temporary_ipaddr'])
+    check_macchine_da_inserire(macchine_da_inserire[hyp_sf],config['general']['min_macchine'],config['general']['verbose'])
 
 for k in config['general']['brand'].split(','):
     if config['general']['verbose']:
@@ -42,4 +40,5 @@ for k in config['general']['brand'].split(','):
     ## se necessario installa una nuova macchina lhcp
     macchine_da_inserire = controlla_macchine(active_server=active_server,available_server=prov_ssd,config=config[k],macchine_da_inserire=macchine_da_inserire,general_config=config['general'])
 
-check_macchine_da_inserire(macchine_da_inserire,config['general']['min_macchine'],config['general']['verbose'])
+for hyp_sf in config['general']['hypervisor_serverfarm']:
+    check_macchine_da_inserire(macchine_da_inserire[hyp_sf],config['general']['min_macchine'],config['general']['verbose'])

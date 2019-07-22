@@ -30,7 +30,14 @@ echo -e "${IPADDR}\t\t${HOSTNAME} ${HOSTNAME%%.*}" >> /etc/hosts
 #rm -rf /root/.ssh/authorized_keys
 rm -rf /etc/udev/rules.d/70-persistent-net.rules
 
+## fix wrong permission
+chmod 4750 /usr/sbin/suphp
+
 #configurazione r1soft
+sed -i "s/https:\/\/lhbk1011.webapps.net/<URL>/g" /root/r1soft-cpanel-plugin-2.0/r1redirect.php 
+sed -i "s/b4b42034-877a-4219-aacd-698a16326bf9/<ID>/g" /root/r1soft-cpanel-plugin-2.0/r1redirect.php
+[ -f /usr/local/cpanel/base/frontend/paper_lantern/r1redirect.php ] && rm -f /usr/local/cpanel/base/frontend/paper_lantern/r1redirect.php
+
 sed -i "s/^url\(.*\)/url = ${R1SOFT_BACKUP_SERVER}/g" /etc/r1soft.ini
 sed -i "s/^hours\(.*\)/hours = ${BACKUP_HOUR}/g" /etc/r1soft.ini
 sed -i "s/^minutes\(.*\)/minutes = ${BACKUP_MINUTE}/g" /etc/r1soft.ini
@@ -44,7 +51,7 @@ chmod +x /usr/local/scripts/estrai_cPanel_id.py
 /usr/local/cpanel/scripts/install_plugin r1soft-cpanel-plugin-2.0 --theme paper_lantern
 
 ## fix softaculous
-mkdir /var/softtmp
+mkdir -p /var/softtmp
 chmod 0777 /var/softtmp
 
 ## registrazione cloudlinux (sposto queste 2 operazioni dopo il reboot quando il server ha il nuovo indirizzo ip)
@@ -53,3 +60,5 @@ chmod 0777 /var/softtmp
 
 ## deploy cic
 puppi deploy cpanel-instance-client
+
+exit 0

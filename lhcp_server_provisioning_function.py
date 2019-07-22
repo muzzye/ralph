@@ -30,12 +30,15 @@ def read_config(file):
     blacklist = []
     for black in config.get('general','blacklist').split(','):
         blacklist.append(black)
+    hyp_sf = []
+    for hsf in config.get('general', 'hypervisor_serverfarm').split(','):
+        hyp_sf.append(hsf)
     ## TODO: gestire l'errore nel caso in cui manchi un parametro (prevedere un default)
-    conf['general'] = { 'hypervisor_serverfarm': config.get('general', 'hypervisor_serverfarm'), 'brand': config.get('general','brand'), 'puppet_path': config.get('general','puppet_path'), 'puppet_git_path': config.get('general','puppet_git_path'), 'blacklist': blacklist , 'min_macchine': config.get('general','min_macchine'), 'day_warning': config.get('general','day_warning'), 'day_critical': config.get('general','day_critical'), 'dontinstall': config.getboolean('general','dontinstall'), 'verbose': config.getboolean('general','verbose') }
-    for hyp_sf in conf['general']['hypervisor_serverfarm'].split(','):
+    conf['general'] = { 'hypervisor_serverfarm': hyp_sf, 'brand': config.get('general','brand'), 'puppet_path': config.get('general','puppet_path'), 'puppet_git_path': config.get('general','puppet_git_path'), 'blacklist': blacklist , 'min_macchine': config.get('general','min_macchine'), 'day_warning': config.get('general','day_warning'), 'day_critical': config.get('general','day_critical'), 'dontinstall': config.getboolean('general','dontinstall'), 'verbose': config.getboolean('general','verbose') }
+    for hyp_sf in conf['general']['hypervisor_serverfarm']:
         conf[hyp_sf]= { 'type': config.get(hyp_sf,'type'), 'server_farm': config.get(hyp_sf,'server_farm'), 'host': config.get(hyp_sf,'host'), 'user': config.get(hyp_sf,'user'), 'pass': config.get(hyp_sf,'pass'), 'temporary_ipaddr': config.get(hyp_sf,'temporary_ipaddr') }
     for brand in conf['general']['brand'].split(','):
-        conf[brand]= { 'brand': config.get(brand,'brand'), 'user_fisica': config.get(brand,'user_fisica'), 'user_virtual': config.get(brand,'user_virtual'), 'disk': config.get(brand,'disk'), 'user_per_day': config.get(brand,'user_per_day'), 'wh': config.get(brand,'wh'), 'puppet_template': config.get(brand,'puppet_template'), 'tags': config.get(brand,'tags').split(",") }
+        conf[brand]= { 'brand': config.get(brand,'brand'), 'user_fisica': config.get(brand,'user_fisica'), 'user_virtual': config.get(brand,'user_virtual'), 'disk': config.get(brand,'disk'), 'user_per_day': config.get(brand,'user_per_day'), 'wh': config.get(brand,'wh'), 'puppet_template': config.get(brand,'puppet_template'), 'tags': config.get(brand,'tags').split(","), 'preferred_serverfarm':config.get(brand,'preferred_serverfarm').split(",") }
     return conf
 
 
@@ -163,6 +166,10 @@ def getVmSwitchedOff(vm, depth=1):
 
    return
 
+def powerOnProxmox(proxmox,node,vmid):
+    """ power on a virtual machine on proxmox """
+    proxmox.startVirtualMachine(node,vmid)
+
 def getProxmoxVmSwitchedOff(proxmox,name="^lhcp\d+$"):
     """ given a proxmox connection and a name to be used as pattern """
     """ return the list of poweredoff servers """
@@ -170,7 +177,7 @@ def getProxmoxVmSwitchedOff(proxmox,name="^lhcp\d+$"):
     for node in proxmox.getClusterNodeList()['data']:
         for vm in proxmox.getNodeVirtualIndex(node['node'])['data']:
             if vm['status'] == 'stopped' and re.match(name,vm['name']):
-                lista.append(vm['name'])
+                lista.append({'name': vm['name'], 'vmid': vm['vmid'], 'node': node['node']})
     return lista
 
 def get_ipaddr(vm):
@@ -180,16 +187,17 @@ def get_ipaddr(vm):
     if int(hnum[0][1:]) < 255:
         ip4 = str(int(hnum[0][1:4]))
         if int(hnum[0][0]) == 0:
-            ## macchina lhcp0xxx
+            ## macchina lhcp0xxx (81.88.62.0/25)
             ip1 = "81.88."
             ip3 = str(62 + int(hnum[0][0]))
         elif int(hnum[0][0]) == 1 or int(hnum[0][0]) == 2:
-            ## macchina lhcp[12]xxx
+            ## macchina lhcp[12]xxx (185.2.5.0/21)
             ip1 = "185.2."
             ip3 = str(3 + int(hnum[0][0]))
         elif int(hnum[0][0]) == 3:
-            ## macchina lhcp3xxx
-            ip1 = "81.88.52." + ip4
+            ## macchina lhcp3xxx (81.88.52.0/24)
+            ip1 = "81.88."
+            ip3 = "52"
         else:
             return False
         ipaddr = ip1 + ip3 + "." + ip4
@@ -207,10 +215,10 @@ def get_ipaddr_eth1(vm):
             ip1 = "172.22."
             ip3 = str(15 + int(hnum[0][0]))
         elif int(hnum[0][0]) == 3:
-            ## macchine lhcp3xxx
+            ## macchine lhcp3xxx (172.21.24.0/21)
             ip4 = str(int(hnum[0][1:4]))
             ip1 = "172.21."
-            ip3 = str(18 + int(hnum[0][0]))
+            ip3 = str(21 + int(hnum[0][0]))
         else:
             return False
         ipaddr = ip1 + ip3 + "." + ip4
@@ -227,14 +235,14 @@ def cerca_backup(server_farm="uk"):
     if server_farm == "uk":
         lhbk_regexp = 'lhbk[12].*'
     elif server_farm == "it":
-        lhbk_regexp = 'lhbk0.*'
+        lhbk_regexp = 'lhbk3.*'
     else:
         print "server_farm not set use default server farm (it)"
-        lhbk_regexp = 'lhbk0.*'
+        lhbk_regexp = 'lhbk3.*'
 
     es = Elasticsearch([{'host': '172.22.131.66', 'port': 9200}])
 
-    request = '{ "sort": [ { "perc_used_disk": { "order": "asc" } }, { "num_lhcp": { "order": "asc" } } ],"_source": ["beat.hostname","device","num_lhcp","perc_used_disk"],  "query": {"bool": { "must": [ { "query_string": { "query": "perc_used_disk: [ 0 TO 60 ] AND num_lhcp: [ 0 TO 8] AND beat.hostname:/' + lhbk_regexp + '/",   "analyze_wildcard": true, "default_field": "*" }},{"range": {"@timestamp": {"gte": "now-140m","lte": "now"}}}]}}}'
+    request = '{ "sort": [ { "perc_used_disk": { "order": "asc" } }, { "num_lhcp": { "order": "asc" } } ],"_source": ["beat.hostname","device","num_lhcp","perc_used_disk"],  "query": {"bool": { "must": [ { "query_string": { "query": "perc_used_disk: [ 0 TO 60 ] AND num_lhcp: [ 0 TO 7] AND beat.hostname:/' + lhbk_regexp + '/",   "analyze_wildcard": true, "default_field": "*" }},{"range": {"@timestamp": {"gte": "now-140m","lte": "now"}}}]}}}'
 
     #print request
     res = es.search(index="lhbk-*", body=request )
@@ -246,6 +254,7 @@ def cerca_backup(server_farm="uk"):
         # {u'beat': {u'hostname': u'lhbk1022.webapps.net'}, u'device': u'/dev/sdb1', u'perc_used_disk': u'1', u'num_lhcp': u'0'}
         host = hit['_source']['beat']['hostname']
         device = hit['_source']['device']
+        device = re.match(r"^\/dev\/(.*)[1-9]", device).group(1)
         num_lhcp = hit['_source']['num_lhcp']
         perc_used_disk = hit['_source']['perc_used_disk']
         arr.append ({ 'host': host, 'device': device, 'num_lhcp': num_lhcp, 'perc_used_disk': perc_used_disk })
@@ -391,21 +400,26 @@ def configure_puppet(vm,puppet_path):
         bashCommand = "cd " + puppet_path + " && svn up >/dev/null"
         os.system(bashCommand)
 
-        f = open(puppet_path + "/" + f,"a")
-        f.write("\n" + vm + ".webapps.net\n")
-        f.close()
+        if vm + ".webapps.net" in open(puppet_path + "/" + f).read():
+            print "macchina " + vm + " gia' presente nell'autosign di puppet"
+        else:
+          f = open(puppet_path + "/" + f,"a")
+          f.write("\n" + vm + ".webapps.net\n")
+          f.close()
 
-        bashCommand = "cd " + puppet_path + " && svn ci -m 'autoadd " + vm + " to autosign' >/dev/null"
-        os.system(bashCommand)
+          bashCommand = "cd " + puppet_path + " && svn ci -m 'autoadd " + vm + " to autosign' >/dev/null"
+          os.system(bashCommand)
 
         print "puppet run"
         ipaddr = get_ipaddr(vm)
         if ipaddr:
             ## cloudlinux license
-            bashCommand = "ssh -i chiave_lhcp_provisioning -oStrictHostKeyChecking=no -p 25088 root@" + ipaddr + " 'rm -rf /var/lve/lveinfo.ver && /usr/sbin/clnreg_ks --force'"
-            os.system(bashCommand)
+            bashCommand = "ssh -i chiave_lhcp_provisioning -oStrictHostKeyChecking=no -p 25088 root@" + ipaddr + " 'rm -rf /var/lve/lveinfo.ver && /usr/sbin/clnreg_ks --force && cagefsctl --reinit > /dev/null'"
+            while os.system(bashCommand):
+                time.sleep(1)
             bashCommand = "ssh -i chiave_lhcp_provisioning -oStrictHostKeyChecking=no -p 25088 root@" + ipaddr + " 'puppet agent -t >/dev/null; /usr/local/cpanel/3rdparty/bin/php /usr/local/cpanel/whostmgr/docroot/cgi/softaculous/cli.php  --install --cpuser=nagioscheck --cppass=Nagios.User,69 --soft=26 --softdirectory=wp --admin_username=admin --admin_pass=Nagios.User,69 --site_name=\"NagiosCheck Blog\" ; /usr/local/scripts/kibana_systems' >/dev/null 2>&1"
-            os.system(bashCommand)
+            while os.system(bashCommand):
+                time.sleep(1)
             return True
     return False
 
@@ -416,16 +430,18 @@ def configure_naemon(vm,puppet_template,puppet_path,server_farm="uk"):
     """ non sia gia' sotto puppet """
 
     if server_farm == "uk":
-        prefix = "uk_"
+        filename = "uk_cpanel_hosts.cfg"
+        template = "lhcp-virtual"
     elif server_farm == "it":
-        prefix = ""
+        filename = "cpanel_cluster_hosts.cfg"
+        template = "lhcp-proxmox"
     else:
         print "server farm not recognize: use it as default"
-        prefix = ""
+        filename = "cpanel_cluster_hosts.cfg"
 
     if os.path.isdir(puppet_path):
         p = puppet_path + "/modules/naemon/files/naemon/conf.d_register/puwebhosting/"
-        conffile = p + prefix + "cpanel_hosts.cfg"
+        conffile = p + filename
         bashCommand = "cd " + p + " && svn up >/dev/null"
         os.system(bashCommand)
 
@@ -440,7 +456,7 @@ def configure_naemon(vm,puppet_template,puppet_path,server_farm="uk"):
             f.write("    host_name       " + vm + ".webapps.net\n")
             f.write("    _SHORTNAME      " + vm + "\n")
             f.write("     address        " + vm + ".webapps.net\n")
-            f.write("     use            lhcp-virtual," + puppet_template + "\n")
+            f.write("     use            " + template + "," + puppet_template + "\n")
             f.write("}\n")
             f.close()
 
@@ -475,18 +491,36 @@ def configure_server(vm='',temporary_ipaddr='185.2.6.241',server_farm='uk'):
 
         ## copia i files sulla macchina (dovrebbero essere sul template)
         bashCommand = "scp -i chiave_lhcp_provisioning -P 25088 auto_install2.sh root@" + temporary_ipaddr + ":/root/auto_install.sh #>/dev/null 2>&1"
-        os.system(bashCommand)
+        while os.system(bashCommand):
+            print "server not ready, sleep 1 second"
+            time.sleep(1)
+
         bashCommand = "ssh -i chiave_lhcp_provisioning -oStrictHostKeyChecking=no -p 25088 root@" + temporary_ipaddr + " 'chmod +x /root/auto_install.sh' >/dev/null 2>&1"
-        os.system(bashCommand)
+        while os.system(bashCommand):
+            print "server not ready, sleep 1 second"
+            time.sleep(1)
+
+        bashCommand = "scp -i chiave_lhcp_provisioning -P 25088 cdp-add-agent.py root@" + temporary_ipaddr + ":/usr/local/scripts/ >/dev/null 2>&1"
+        while os.system(bashCommand):
+            print "server not ready, sleep 1 second"
+            time.sleep(1)
 
         bashCommand = "scp -i chiave_lhcp_provisioning -P 25088 estrai_cPanel_id.py root@" + temporary_ipaddr + ":/usr/local/scripts/ >/dev/null 2>&1"
-        os.system(bashCommand)
+        while os.system(bashCommand):
+            print "server not ready, sleep 1 second"
+            time.sleep(1)
 
         bashCommand = "ssh -i chiave_lhcp_provisioning -oStrictHostKeyChecking=no -p 25088 root@" + temporary_ipaddr + " '/root/auto_install.sh' #>/dev/null 2>&1"
-        os.system(bashCommand)
+        while os.system(bashCommand):
+            print "server not ready, sleep 1 second"
+            time.sleep(1)
+
 
         bashCommand = "ssh -i chiave_lhcp_provisioning -oStrictHostKeyChecking=no -p 25088 root@" + temporary_ipaddr + " 'reboot' #> /dev/null 2>&1"
-        os.system(bashCommand)
+        while os.system(bashCommand):
+            print "server not ready, sleep 1 second"
+            time.sleep(1)
+
         return True
     else:
         return False
@@ -603,7 +637,7 @@ def proxmox_getavailableserver(host,user,pwd,port=8006,server_farm="it",temporar
     macchine_da_inserire = []
     server = getProxmoxVmSwitchedOff(b)
     for n in server:
-        macchine_da_inserire.append({'name': n, 'host': host, 'type': 'vmware', 'server_farm': server_farm, 'temporary_ipaddr': temporary_ipaddr, 'user': user, 'pass': pwd})
+        macchine_da_inserire.append({'name': n['name'], 'host': host, 'node': n['node'], 'vmid': n['vmid'], 'type': 'proxmox', 'server_farm': server_farm, 'temporary_ipaddr': temporary_ipaddr, 'user': user, 'pass': pwd})
     macchine_da_inserire.sort()
     return macchine_da_inserire
 
@@ -623,8 +657,12 @@ def vmware_getavailableserver(host,user,pwd,port=443,server_farm="uk",temporary_
             for vm in vmList:
                 name=getVmSwitchedOff(vm)
                 if name:
+                    ## if name came in list extract it
+                    if isinstance(name, list):
                         for n in name:
-                            macchine_da_inserire.append({'name': n, 'host': host, 'type': 'vmware', 'server_farm': server_farm, 'temporary_ipaddr': temporary_ipaddr, 'user': user, 'pass': pwd})
+                            macchine_da_inserire.append({'name': n, 'host': host, 'type': 'vmware', 'server_farm': server_farm, 'temporary_ipaddr': temporary_ipaddr, 'user': user, 'pass': pwd, 'vmid': '0', 'node': host})
+                    else:
+                      macchine_da_inserire.append({'name': name, 'host': host, 'type': 'vmware', 'server_farm': server_farm, 'temporary_ipaddr': temporary_ipaddr, 'user': user, 'pass': pwd, 'vmid': '0', 'node': host})
     macchine_da_inserire.sort()
     #macchine_da_inserire.reverse()
     return macchine_da_inserire
@@ -633,7 +671,7 @@ def check_macchine_da_inserire(macchine,min_macchine,verbose=True):
     """ controlla se le macchine da inserire siano inferiori al valore nella configurazione"""
     tot_macchine = ""
     for n in macchine:
-        tot_macchine = tot_macchine + " " + n['name']
+        tot_macchine = tot_macchine + " " + str(n['name'])
 
     if len(macchine) < int(min_macchine):
         print "\033[1;31;40mCRITICAL only " + str(len(macchine)) + " servers to be inserted (" + tot_macchine + "), open a task to ct-infra in order to create new servers\033[1;37;40m"
@@ -643,21 +681,62 @@ def check_macchine_da_inserire(macchine,min_macchine,verbose=True):
             print str(len(macchine)) + " servers to be inserted:" + tot_macchine
         return True
 
-def poweron_server(hyp_type='vmware',host='',user='',passwd='',server=''):
+def poweron_server(hyp_type='vmware',host='',user='',passwd='',server='',node='', vmid=''):
     """ poweron server on every supported hypervisor """
     if hyp_type == 'vmware':
         content=vmware_connect(host,user,passwd)
         vmware_poweron(server,content)
-    elif macchina_da_inserire['type'] == 'proxmox':
-        ## accendere la macchina su proxmox
-        ## TOFIX: agganciare funzioni per proxmox
-        print "daniele lavora!!!"
+    elif hyp_type == 'proxmox':
+        a = prox_auth(host,user,passwd)
+        proxmox = pyproxmox(a)
+        powerOnProxmox(proxmox,node,vmid)
+        ha = []
+        ha.append(('sid',"vm:"+vmid))
+        ha.append(('max_relocate',"2"))
+        ha.append(('max_restart',"2"))
+        ha.append(('comment',server))
+        ## non si riesce a configurare l'HA perche' l'utente non ha permessi sufficienti
+        proxmox.createHaResource(ha)
     else:
         print "type della macchina non riconosciuta, non riesco ad accenderla"
         sys.exit(2)
     return True
 
-def controlla_macchine(active_server=[],available_server=[],config=[],macchine_da_inserire=[],general_config=[]):
+def install_new_server(macchina_da_inserire=[],general_config=[],config=[]):
+    """ given: """
+    """ - an array with the informartion of the server to be installed """
+    """ - an array with the general_config """
+    """ - an array with the config specific for brand """
+    """ Install the server and add to the provisioning """
+    print "add a server into provisioning (" + macchina_da_inserire['name'] + ")"
+    print "poweron server"
+    #print macchina_da_inserire
+    poweron_server(hyp_type=macchina_da_inserire['type'],host=macchina_da_inserire['host'],user=macchina_da_inserire['user'],passwd=macchina_da_inserire['pass'],server=macchina_da_inserire['name'],node=macchina_da_inserire['node'],vmid=macchina_da_inserire['vmid'])
+    print "activate cloudlinux license"
+    activate_cloudlinux_license(macchina_da_inserire['name'])
+    print "create DNS records"
+    create_dns_record(macchina_da_inserire['name'])
+    create_reverse(macchina_da_inserire['name'],general_config['puppet_git_path'])
+    print "sleep 60 seconds (waiting for server poweron)"
+    time.sleep(60)
+    print "configure new server"
+    configure_server(vm=macchina_da_inserire['name'],temporary_ipaddr=macchina_da_inserire['temporary_ipaddr'],server_farm=macchina_da_inserire['server_farm'])
+    print "sleep 60 seconds (waiting for server reboot)"
+    time.sleep(60)
+    print "activate Softaculous license and update Softaculous"
+    softaculous_licence(macchina_da_inserire['name'])
+    print "configure puppet"
+    configure_puppet(macchina_da_inserire['name'],general_config['puppet_path'])
+    print "put server on naemon"
+    configure_naemon(macchina_da_inserire['name'],config['puppet_template'],general_config['puppet_path'],server_farm=macchina_da_inserire['server_farm'])
+    print "sleep 30 seconds"
+    time.sleep(30)
+    print "set naemon downtime"
+    naemonDowntime(vm=macchina_da_inserire['name'])
+    print "insert server into provisioning"
+    insertServerInProvisioning(macchina_da_inserire['name'],config['wh'],config['tags'])
+
+def controlla_macchine(active_server=[],available_server=[],config=[],macchine_da_inserire={},general_config=[]):
     """ date 2 liste: """
     """ - active_server: le macchine attive sul provisioning """
     """ - available_server: le macchine disponibili """
@@ -722,36 +801,14 @@ def controlla_macchine(active_server=[],available_server=[],config=[],macchine_d
         ## se abbiamo meno di 7 giorni di autonomia prepariamo una nuova macchina
         print str("\033[1;31;40m" + config['brand'] +": total users to be activated: " + str(tot_user) + " ended in " + str(day_left) + " days\033[1;37;40m")
         if not general_config['dontinstall']:
-            if macchine_da_inserire:
-                macchina_da_inserire = macchine_da_inserire.pop(0)
-                print "add a server into provisioning (" + macchina_da_inserire['name'] + ")"
-                print "poweron server"
-                poweron_server(hyp_type=macchina_da_inserire['type'],host=macchina_da_inserire['host'],user=macchina_da_inserire['user'],passwd=macchina_da_inserire['pass'],server=macchina_da_inserire['name'])
-                print "activate cloudlinux license"
-                activate_cloudlinux_license(macchina_da_inserire['name'])
-                print "create DNS records"
-                create_dns_record(macchina_da_inserire['name'])
-                create_reverse(macchina_da_inserire['name'],general_config['puppet_git_path'])
-                print "sleep 60 seconds (waiting for server poweron)"
-                time.sleep(60)
-                print "configure new server"
-                configure_server(vm=macchina_da_inserire['name'],temporary_ipaddr=macchina_da_inserire['temporary_ipaddr'],server_farm=macchina_da_inserire['server_farm'])
-                print "sleep 60 seconds (waiting for server reboot)"
-                time.sleep(60)
-                print "activate Softaculous license and update Softaculous"
-                softaculous_licence(macchina_da_inserire['name'])
-                print "configure puppet"
-                configure_puppet(macchina_da_inserire['name'],general_config['puppet_path'])
-                print "put server on naemon"
-                configure_naemon(macchina_da_inserire['name'],config['puppet_template'],general_config['puppet_path'],server_farm=macchina_da_inserire['server_farm'])
-                print "sleep 30 seconds"
-                time.sleep(30)
-                print "set naemon downtime"
-                naemonDowntime(vm=macchina_da_inserire['name'])
-                print "insert server into provisioning"
-                insertServerInProvisioning(macchina_da_inserire['name'],config['wh'],config['tags'])
-            else:
-                print "\033[1;31;40mCRITICAL i dont have server to power on\033[1;37;40m"
+            ## se ci sono piu' server_farm cicla e usa la prima disponibile
+            for server_farm in config['preferred_serverfarm']:
+                if macchine_da_inserire[server_farm]:
+                    macchina_da_inserire= macchine_da_inserire[server_farm].pop(0)
+                    install_new_server(macchina_da_inserire=macchina_da_inserire,general_config=general_config,config=config)
+                    break
+                else:
+                    print "\033[1;31;40mCRITICAL i dont have server to power on on server farm " + server_farm + "\033[1;37;40m"
         else:
             print "dontinstall True dont install new servers"
 
