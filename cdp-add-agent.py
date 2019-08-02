@@ -4,6 +4,9 @@
 #
 # CHANGELOG
 #  - Aggiunte exception con procedura di rollback in caso di fault creazione policy
+#
+#  - 22/07/2019  Aggiunto controllo license disponibili
+#
 
 import suds.client
 import logging
@@ -91,6 +94,12 @@ def get_wsdl_url(hostname, namespace, use_ssl=True, port_override=None):
     logging.debug('Creating WSDL URL: %s' % url)
     return url
 
+def checkLicenseAvailable():
+
+    return (( client.Configuration.service.getServerLicenseInformation().licenseAgentCount -
+              client.Configuration.service.getServerLicenseInformation().currentVirtualAgentCount -
+              client.Configuration.service.getServerLicenseInformation().currentAgentCount ) >=0)
+
 def rollback_exception(hostname):
 
     for i in client.Policy2.service.getPolicies():
@@ -115,6 +124,10 @@ if __name__ == '__main__':
     logger.info('Setting up backups for host (%s) on CDP server (%s) with description: %s', hostname, cdp_host, description)
     client = MetaClient(get_wsdl_url(cdp_host, '%s'), username=username, password=password,faults=True)
     logger.debug('Creating special types...')
+
+    if not checkLicenseAvailable():
+        raise Exception('License not available')
+
     DiskSafeObject = client.DiskSafe.factory.create('diskSafe.disksafe')
     CompressionType = client.DiskSafe.factory.create('diskSafe.compressionType')
     CompressionLevel = client.DiskSafe.factory.create('diskSafe.compressionLevel')
@@ -240,4 +253,3 @@ if __name__ == '__main__':
 
         logger.info('Created policy with ID: %s', policy.id)
         logger.info('Finished setting up backups for host: %s', hostname)
-
