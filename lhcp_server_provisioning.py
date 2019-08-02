@@ -15,6 +15,8 @@ import atexit
 import ssl
 import re
 import hashlib
+import r1soft
+
 from lhcp_server_provisioning_function import *
 
 config = read_config(os.path.dirname(__file__) + '/lhcp_server_provisioning.conf')

@@ -18,6 +18,7 @@ import atexit
 import ssl
 import re
 import hashlib
+import r1soft
 
 def read_config(file):
     """ legge da un file di configurazione e ritorna un dizionario con le configurazioni """
@@ -34,7 +35,7 @@ def read_config(file):
     for hsf in config.get('general', 'hypervisor_serverfarm').split(','):
         hyp_sf.append(hsf)
     ## TODO: gestire l'errore nel caso in cui manchi un parametro (prevedere un default)
-    conf['general'] = { 'hypervisor_serverfarm': hyp_sf, 'brand': config.get('general','brand'), 'puppet_path': config.get('general','puppet_path'), 'puppet_git_path': config.get('general','puppet_git_path'), 'blacklist': blacklist , 'min_macchine': config.get('general','min_macchine'), 'day_warning': config.get('general','day_warning'), 'day_critical': config.get('general','day_critical'), 'dontinstall': config.getboolean('general','dontinstall'), 'verbose': config.getboolean('general','verbose') }
+    conf['general'] = { 'hypervisor_serverfarm': hyp_sf, 'brand': config.get('general','brand'), 'puppet_path': config.get('general','puppet_path'), 'puppet_git_path': config.get('general','puppet_git_path'), 'blacklist': blacklist , 'min_macchine': config.get('general','min_macchine'), 'day_warning': config.get('general','day_warning'), 'day_critical': config.get('general','day_critical'), 'dontinstall': config.getboolean('general','dontinstall'), 'verbose': config.getboolean('general','verbose'), 'lhbk_user': config.get('general','lhbk_user'), 'lhbk_password': config.get('general','lhbk_password') }
     for hyp_sf in conf['general']['hypervisor_serverfarm']:
         conf[hyp_sf]= { 'type': config.get(hyp_sf,'type'), 'server_farm': config.get(hyp_sf,'server_farm'), 'host': config.get(hyp_sf,'host'), 'user': config.get(hyp_sf,'user'), 'pass': config.get(hyp_sf,'pass'), 'temporary_ipaddr': config.get(hyp_sf,'temporary_ipaddr') }
     for brand in conf['general']['brand'].split(','):
@@ -226,7 +227,75 @@ def get_ipaddr_eth1(vm):
     else:
         return False
 
-def cerca_backup(server_farm="uk"):
+def validate_r1soft_instance(host='',username='',password='',device='',verbose=False):
+    """ given an lhbk server and a device: """
+    """ - grab from r1soft all the lhcp that use the device """
+    """ - grab from elastic search total disk of the device """
+    """ - grab from elastic search total disk of each lhcp """
+    """ and return True if r1soft instance can accept more backup """
+    somma = 0
+    disk_lhbk = get_lhbk_disk(host=host,device=device)
+    if verbose == True:
+        print host + " " + device + " " + str(disk_lhbk)
+    for lhcp in list_lhcp_on_lhbk(lhbk=host,username=username,password=password,device=device):
+        value = get_lhcp_disk(lhcp=lhcp)
+        if verbose == True:
+            print "  " + lhcp + " " + str(value)
+        somma = somma + get_lhcp_disk(lhcp=lhcp)
+    if verbose == True:
+        print "SOMMA: " + str(somma)
+    if ( somma * 1.36 ) < disk_lhbk:
+        return True
+    else:
+        return False
+
+def get_lhbk_disk(host='',device=''):
+    """ given an lhcp instance and a device return the total disk for the device"""
+    es = Elasticsearch([{'host': '172.22.131.66', 'port': 9200}])
+
+    request = '{ "size": 1, "sort": [ { "@timestamp": { "order": "desc", "unmapped_type": "boolean" } } ], "_source": ["beat.hostname","device","total_disk"], "query": { "bool": { "must": [ { "match_all": {} }, { "match_phrase": { "beat.hostname": { "query": "' + host + '" } } }, { "regexp": { "mount": { "value": ".*' + device + '.*" } } }, { "range": {"@timestamp": {"gte": "now-240m","lte": "now"} } } ] } } }'
+    #print request
+    res = es.search(index="lhbk-*", body=request )
+    #for hit in res['hits']['hits']:
+    #    print hit['_source']['total_disk']
+    try:
+        return int(res['hits']['hits'][0]['_source']['total_disk'])*1024
+    except:
+        return 0
+
+def get_lhcp_disk(lhcp=""):
+    """ given an lhcp return the total disk """
+    es = Elasticsearch([{'host': '172.22.131.66', 'port': 9200}])
+
+    request = '{ "size": 1, "sort": [ { "@timestamp": { "order": "desc", "unmapped_type": "boolean" } } ], "_source": ["beat.hostname","tot_disk_size"], "query": { "bool": { "must": [ { "match_all": {} }, { "match_phrase": { "beat.hostname": { "query": "' + lhcp + '" } } }, { "range": {"@timestamp": {"gte": "now-240m","lte": "now"} } } ] } } }'
+
+    res = es.search(index="systems-*", body=request )
+    #for hit in res['hits']['hits']:
+    #    print hit['_source']['total_disk']
+    try:
+        return int(res['hits']['hits'][0]['_source']['tot_disk_size'])
+    except:
+        return 0
+
+def list_lhcp_on_lhbk(lhbk="",username="",password="",device=""):
+    lhcp = []
+    client = r1soft.cdp3.CDP3Client(lhbk, username, password)
+    disk_safes = client.DiskSafe.service.getDiskSafes()
+    #for ds in disk_safes:
+        #print ds['agentID']
+        #print ds['path'].split("/")[2]
+        #print ds['description']
+        #print ds
+    for agent in client.Agent.service.getAgents():
+        for ds in disk_safes:
+            #print ds['path'].split("/")[2]
+            #print agent['id']
+            #print ds['agentID']
+            if ds['path'].split("/")[2] == device and agent['id'] == ds['agentID']:
+                lhcp.append(agent.hostname)
+    return lhcp
+
+def cerca_backup(server_farm="uk",username='',password='',verbose=False,searchAll=False):
     """ cerca la macchina lhbk e il device con meno risorse in termine di: """
     """ - numero lhcp che fanno backup sul device; - spazio libero sul device. """
     """ restituisce un dizionario contenente device, host, perc_used_disk, num_lhcp: """
@@ -242,7 +311,7 @@ def cerca_backup(server_farm="uk"):
 
     es = Elasticsearch([{'host': '172.22.131.66', 'port': 9200}])
 
-    request = '{ "sort": [ { "perc_used_disk": { "order": "asc" } }, { "num_lhcp": { "order": "asc" } } ],"_source": ["beat.hostname","device","num_lhcp","perc_used_disk"],  "query": {"bool": { "must": [ { "query_string": { "query": "perc_used_disk: [ 0 TO 60 ] AND num_lhcp: [ 0 TO 7] AND beat.hostname:/' + lhbk_regexp + '/",   "analyze_wildcard": true, "default_field": "*" }},{"range": {"@timestamp": {"gte": "now-140m","lte": "now"}}}]}}}'
+    request = '{ "sort": [ { "perc_used_disk": { "order": "asc" } }, { "num_lhcp": { "order": "asc" } } ],"_source": ["beat.hostname","device","num_lhcp","perc_used_disk"],  "query": {"bool": { "must": [ { "query_string": { "query": "perc_used_disk: [ 0 TO 60 ] AND num_lhcp: [ 0 TO 10] AND beat.hostname:/' + lhbk_regexp + '/",   "analyze_wildcard": true, "default_field": "*" }},{"range": {"@timestamp": {"gte": "now-140m","lte": "now"}}}]}}}'
 
     #print request
     res = es.search(index="lhbk-*", body=request )
@@ -257,7 +326,11 @@ def cerca_backup(server_farm="uk"):
         device = re.match(r"^\/dev\/(.*)[1-9]", device).group(1)
         num_lhcp = hit['_source']['num_lhcp']
         perc_used_disk = hit['_source']['perc_used_disk']
-        arr.append ({ 'host': host, 'device': device, 'num_lhcp': num_lhcp, 'perc_used_disk': perc_used_disk })
+        if validate_r1soft_instance(host=host,username=username,password=password,device=device,verbose=verbose):
+           arr.append ({ 'host': host, 'device': device, 'num_lhcp': num_lhcp, 'perc_used_disk': perc_used_disk })
+
+    if searchAll:
+        return arr
 
     if len(arr) > 0:
         return arr.pop(0)
@@ -468,7 +541,7 @@ def configure_naemon(vm,puppet_template,puppet_path,server_farm="uk"):
             os.system(bashCommand)
             return True
 
-def configure_server(vm='',temporary_ipaddr='185.2.6.241',server_farm='uk'):
+def configure_server(vm='',temporary_ipaddr='185.2.6.241',lhbk_user='',lhbk_password='',server_farm='uk'):
     """ data una macchina la configura """
     ipaddr1 = get_ipaddr(vm)
     ipaddr2 = get_ipaddr_eth1(vm)
@@ -476,13 +549,13 @@ def configure_server(vm='',temporary_ipaddr='185.2.6.241',server_farm='uk'):
         with open('auto_install.sh', 'r') as file:
             filedata = file.read()
 
-        dic = cerca_backup(server_farm=server_farm)
+        dic = cerca_backup(server_farm=server_farm,username=lhbk_user,password=lhbk_password,verbose=True)
         # Replace the target string
         filedata = filedata.replace('FAKEHOSTNAME', vm + '.webapps.net')
         filedata = filedata.replace('FAKEIPADDR1', ipaddr1)
         filedata = filedata.replace('FAKEIPADDR2', ipaddr2)
         filedata = filedata.replace('FAKEBACKUPSERVER', dic['host'])
-        filedata = filedata.replace('FAKEHOUR', str(dic['num_lhcp']).zfill(2))  ## TODO: vedere se e' il caso di usare il metodo muzz e verificare script niccoli
+        filedata = filedata.replace('FAKEHOUR', str(dic['num_lhcp']).zfill(2))
         filedata = filedata.replace('FAKEVOLUME', dic['device'])
 
         # Write the file out again
@@ -720,7 +793,7 @@ def install_new_server(macchina_da_inserire=[],general_config=[],config=[]):
     print "sleep 60 seconds (waiting for server poweron)"
     time.sleep(60)
     print "configure new server"
-    configure_server(vm=macchina_da_inserire['name'],temporary_ipaddr=macchina_da_inserire['temporary_ipaddr'],server_farm=macchina_da_inserire['server_farm'])
+    configure_server(vm=macchina_da_inserire['name'],temporary_ipaddr=macchina_da_inserire['temporary_ipaddr'],lhbk_user=general_config['lhbk_user'],lhbk_password=general_config['lhbk_password'],server_farm=macchina_da_inserire['server_farm'])
     print "sleep 60 seconds (waiting for server reboot)"
     time.sleep(60)
     print "activate Softaculous license and update Softaculous"
