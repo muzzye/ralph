@@ -14,6 +14,7 @@ COPY auto_install.sh /usr/local/lhcp_server_provisioning/
 COPY lhcp_server_provisioning.conf /usr/local/lhcp_server_provisioning/
 COPY lhcp_server_provisioning_function.py /usr/local/lhcp_server_provisioning/
 COPY lhcp_server_provisioning.py /usr/local/lhcp_server_provisioning/
+COPY pyproxmox.py /usr/local/lhcp_server_provisioning/
 COPY noc_api.php /usr/local/lhcp_server_provisioning/
 COPY r1redirect.php /usr/local/lhcp_server_provisioning/
 COPY soft2.php /usr/local/lhcp_server_provisioning/

@@ -173,12 +173,14 @@ def powerOnProxmox(proxmox,node,vmid):
 
 def getProxmoxVmSwitchedOff(proxmox,name="^lhcp\d+$"):
     """ given a proxmox connection and a name to be used as pattern """
-    """ return the list of poweredoff servers """
+    """ return the list of powered off servers """
+    """ get list only from online nodes """
     lista = []
     for node in proxmox.getClusterNodeList()['data']:
-        for vm in proxmox.getNodeVirtualIndex(node['node'])['data']:
-            if vm['status'] == 'stopped' and re.match(name,vm['name']):
-                lista.append({'name': vm['name'], 'vmid': vm['vmid'], 'node': node['node']})
+        if node['status'] == 'online':
+            for vm in proxmox.getNodeVirtualIndex(node['node'])['data']:
+                if vm['status'] == 'stopped' and re.match(name,vm['name']):
+                    lista.append({'name': vm['name'], 'vmid': vm['vmid'], 'node': node['node']})
     return lista
 
 def get_ipaddr(vm):
