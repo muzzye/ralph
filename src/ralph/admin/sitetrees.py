@@ -111,38 +111,6 @@ sitetrees = [
                 section(_('Disk Shares'), 'data_center', 'DiskShare'),
                 section(_('Server Rooms'), 'data_center', 'ServerRoom'),
                 section(_('VIPs'), 'data_center', 'VIP'),
-        #        section(_('Preboots'), 'deployment', 'Preboot'),
-        #         section(
-        #            _('Preboot configuration'), 'deployment',
-        #            'PrebootConfiguration'
-        #       ),
-        #      section(_('Preboot files'), 'deployment', 'PrebootFile'),
-            ],
-        ),
-        #ralph_item(
-        #    title=_('Cloud'),
-        #    url='#',
-        #    url_as_pattern=False,
-        #    perms_mode_all=False,
-        #    children=[
-        #        section(_('Cloud hosts'), 'virtual', 'CloudHost'),
-        #        section(_('Cloud projects'), 'virtual', 'CloudProject'),
-        #        section(_('Cloud flavors'), 'virtual', 'CloudFlavor'),
-        #        section(_('Cloud providers'), 'virtual', 'CloudProvider'),
-        #        section(_('Cloud images'), 'virtual', 'CloudImage'),
-        #    ],
-        #),
-        #ralph_item(
-        #    title=_('Back Office'),
-        #    url='#',
-        ##    url_as_pattern=False,
-        #    perms_mode_all=False,
-        #    children=[
-        #        section(_('Access Cards'), 'access_cards', 'AccessCard'),
-        #        section(_('Hardware'), 'back_office', 'backofficeasset'),
-        #        section(_('SIM Cards'), 'sim_cards', 'SIMCard'),
-        #    ]
-        #),
         ralph_item(
             title=_('Networks'),
             url='#',
@@ -154,11 +122,7 @@ sitetrees = [
                     _('Network environments'), 'networks', 'networkenvironment'
                 ),
                 section(_('Network kind'), 'networks', 'networkkind'),
-                #section(_('VLan'), 'networks', 'vlan'),
                 section(_('IP Addresses'), 'networks', 'ipaddress'),
-                #section(_('DHCP Servers'), 'dhcp', 'DHCPServer'),
-                #section(_('DNS Server Groups'), 'dhcp', 'DNSServerGroup'),
-                #section(_('DNS Servers'), 'dhcp', 'DNSServer'),
             ]
         ),
         ralph_item(
@@ -172,23 +136,6 @@ sitetrees = [
                 section(_('Software'), 'licences', 'Software'),
             ]
         ),
-        #ralph_item(
-        #    title=_('Intellectual Property'),
-        #    url='#',
-        #    url_as_pattern=False,
-        #    perms_mode_all=False,
-        #    children=[
-        #        section(_('Trade Marks'), 'trade_marks', 'TradeMark'),
-        #        section(_('Domains'), 'domains', 'Domain'),
-        #        section(_('Contracts'), 'domains', 'DomainContract'),
-        #        section(_('Registrants'), 'domains', 'DomainRegistrant'),
-        #        section(_('Owners'), 'accounts', 'RalphUser'),
-        #        section(_('DNS Providers'), 'domains', 'DNSProvider'),
-        #        section(_('Domain Categories'), 'domains', 'DomainCategory'),
-        #        section(_('SSL Certificates'),
-        #                'ssl_certificates', 'SSLCertificate')
-        #    ]
-        #),
         ralph_item(
             title=_('Supports'),
             url='#',
