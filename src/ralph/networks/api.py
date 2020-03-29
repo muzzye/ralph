@@ -6,6 +6,7 @@ from ralph.api import RalphAPISerializer, RalphAPIViewSet, router
 from ralph.api.serializers import RalphAPISaveSerializer
 from ralph.assets.api.serializers import EthernetSerializer
 from ralph.networks.models import (
+#    Vlan,
     IPAddress,
     Network,
     NetworkEnvironment,
@@ -24,6 +25,10 @@ class NetworkKindSerializer(RalphAPISerializer):
         model = NetworkKind
         depth = 1
 
+#class VlanSerializer(RalphAPISerializer):
+#    class Meta:
+#        model = Vlan
+#        depth = 1
 
 class NetworkSimpleSerializer(RalphAPISerializer):
     class Meta:
@@ -120,8 +125,13 @@ class NetworkKindViewSet(RalphAPIViewSet):
     queryset = NetworkKind.objects.all()
     serializer_class = NetworkKindSerializer
 
+#class VlanViewSet(RalphAPIViewSet):
+#    queryset = Vlan.objects.all()
+#    serializer_class = VlanSerializer
+
 router.register(r'ipaddresses', IPAddressViewSet)
 router.register(r'networks', NetworkViewSet)
 router.register(r'network-environments', NetworkEnvironmentViewSet)
 router.register(r'network-kinds', NetworkKindViewSet)
+#router.register(r'vlan', VlanViewSet)
 urlpatterns = []

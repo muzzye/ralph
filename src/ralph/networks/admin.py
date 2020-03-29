@@ -23,7 +23,8 @@ from ralph.networks.models.networks import (
     IPAddress,
     Network,
     NetworkEnvironment,
-    NetworkKind
+    NetworkKind,
+#    Vlan
 )
 
 
@@ -49,6 +50,13 @@ class NetworkEnvironmentAdmin(RalphAdmin):
     readonly_fields = ['next_free_hostname']
     search_fields = ['name']
     list_filter = ['data_center']
+
+
+#@register(Vlan)
+#class VlanAdmin(RalphAdmin):
+#    list_display = ['name', 'vlan']
+#    search_fields = ['name', 'vlan']
+#    list_filter = ['name', 'vlan']
 
 
 @register(NetworkKind)
@@ -109,23 +117,23 @@ class NetworkRalphChangeList(RalphChangeList):
 
 @register(Network)
 class NetworkAdmin(RalphMPTTAdmin):
-    ordering = ['min_ip', '-max_ip']
+    #ordering = ['min_ip', '-max_ip']
+    ordering = ['name']
     change_form_template = 'admin/data_center/network/change_form.html'
-    search_fields = ['name', 'address', 'remarks', 'vlan']
+    search_fields = ['name', 'address', 'remarks', 'vlan' ]
     list_display = [
-        'name', 'address', 'kind', 'vlan', 'network_environment',
+        'name', 'address', 'vlan',
         'subnetworks_count', 'ipaddresses_count'
     ]
     list_filter = [
-        'network_environment', 'kind', 'dhcp_broadcast', 'racks',
-        'terminators', 'service_env', 'vlan',
+        'name', 'vlan',
         ('parent', RelatedAutocompleteFieldListFilter),
         ('min_ip', NetworkRangeFilter), ('address', NetworkClassFilter),
         ('max_ip', ContainsIPAddressFilter)
     ]
     list_select_related = ['kind', 'network_environment']
     raw_id_fields = [
-        'racks', 'gateway', 'terminators', 'service_env', 'dns_servers_group'
+        'racks', 'gateway', 'terminators', 'service_env'
     ]
     resource_class = resources.NetworkResource
     readonly_fields = [
@@ -262,29 +270,28 @@ class NetworkAdmin(RalphMPTTAdmin):
 
 @register(IPAddress)
 class IPAddressAdmin(ParentChangeMixin, RalphAdmin):
-    search_fields = ['address', 'hostname']
+    search_fields = ['address', 'hostname' ]
     ordering = ['number']
     list_filter = [
-        'hostname', 'is_public', 'is_management', ('address', IPRangeFilter)
+        'hostname', 'is_public', 'is_management', 'vlan', ('address', IPRangeFilter)
     ]
     list_display = [
-        'address', 'hostname', 'base_object_link', 'is_gateway',
-        'is_public'
+   #     'address', 'hostname', 'base_object_link', 'vlan', 'is_gateway',
+        'address', 'hostname', 'vlan', 'base_object_link'
     ]
-    readonly_fields = ['get_network_path', 'is_public']
+    readonly_fields = ['get_network_path', 'is_public' ]
     raw_id_fields = ['ethernet']
     resource_class = resources.IPAddressResource
 
     fieldsets = (
         (_('Basic info'), {
             'fields': [
-                'address', 'get_network_path', 'status', 'ethernet'
+                'address', 'get_network_path', 'vlan', 'status', 'ethernet'
             ]
         }),
         (_('Additional info'), {
             'fields': [
-                'hostname', 'is_management', 'is_public', 'is_gateway',
-                'dhcp_expose'
+                'hostname', 'is_management', 'is_public', 'is_gateway'
             ]
         }),
     )

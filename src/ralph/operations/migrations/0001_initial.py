@@ -2,17 +2,17 @@
 from __future__ import unicode_literals
 
 from django.db import migrations, models
-import ralph.lib.mixins.models
-import mptt.fields
 from django.conf import settings
+import mptt.fields
+import django.db.models.deletion
 import ralph.lib.mixins.fields
-import taggit.managers
+import ralph.lib.mixins.models
 
 
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('assets', '0004_auto_20151204_0758'),
+        ('assets', '0001_initial'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
         ('taggit', '0002_auto_20150616_2121'),
     ]
@@ -21,17 +21,16 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='Operation',
             fields=[
-                ('id', models.AutoField(primary_key=True, verbose_name='ID', auto_created=True, serialize=False)),
-                ('title', models.CharField(max_length=350, verbose_name='title')),
-                ('description', models.TextField(blank=True, verbose_name='description', null=True)),
-                ('status', models.PositiveIntegerField(verbose_name='status', choices=[(1, 'open'), (2, 'in progress'), (3, 'resolved'), (4, 'closed')])),
-                ('ticket_id', ralph.lib.mixins.fields.NullableCharField(help_text='External system ticket identifier', blank=True, max_length=20, verbose_name='ticket id', null=True)),
-                ('created_date', models.DateTimeField(blank=True, verbose_name='created date', null=True)),
-                ('update_date', models.DateTimeField(blank=True, verbose_name='updated date', null=True)),
-                ('resolved_date', models.DateTimeField(blank=True, verbose_name='resolved date', null=True)),
-                ('asignee', models.ForeignKey(to=settings.AUTH_USER_MODEL, verbose_name='asignee', null=True, related_name='operations', blank=True, on_delete=models.PROTECT)),
-                ('base_objects', models.ManyToManyField(blank=True, to='assets.BaseObject', verbose_name='objects', related_name='operations')),
-                ('tags', taggit.managers.TaggableManager(to='taggit.Tag', help_text='A comma-separated list of tags.', verbose_name='Tags', through='taggit.TaggedItem', blank=True)),
+                ('id', models.AutoField(verbose_name='ID', primary_key=True, serialize=False, auto_created=True)),
+                ('title', models.CharField(verbose_name='title', max_length=350)),
+                ('description', models.TextField(verbose_name='description', blank=True, null=True)),
+                ('ticket_id', ralph.lib.mixins.fields.TicketIdField(verbose_name='ticket id', max_length=200, unique=True, blank=True, null=True, help_text='External system ticket identifier')),
+                ('created_date', models.DateTimeField(verbose_name='created date', blank=True, null=True)),
+                ('update_date', models.DateTimeField(verbose_name='updated date', blank=True, null=True)),
+                ('resolved_date', models.DateTimeField(verbose_name='resolved date', blank=True, null=True)),
+                ('assignee', models.ForeignKey(verbose_name='assignee', blank=True, null=True, related_name='operations', on_delete=django.db.models.deletion.PROTECT, to=settings.AUTH_USER_MODEL)),
+                ('base_objects', models.ManyToManyField(verbose_name='objects', blank=True, related_name='operations', to='assets.BaseObject')),
+                ('reporter', models.ForeignKey(verbose_name='reporter', blank=True, null=True, related_name='reported_operations', on_delete=django.db.models.deletion.PROTECT, to=settings.AUTH_USER_MODEL)),
             ],
             options={
                 'abstract': False,
@@ -39,24 +38,47 @@ class Migration(migrations.Migration):
             bases=(ralph.lib.mixins.models.AdminAbsoluteUrlMixin, models.Model),
         ),
         migrations.CreateModel(
+            name='OperationStatus',
+            fields=[
+                ('id', models.AutoField(verbose_name='ID', primary_key=True, serialize=False, auto_created=True)),
+                ('name', models.CharField(verbose_name='name', max_length=255, unique=True)),
+            ],
+            options={
+                'ordering': ['name'],
+                'abstract': False,
+            },
+            bases=(ralph.lib.mixins.models.AdminAbsoluteUrlMixin, models.Model),
+        ),
+        migrations.CreateModel(
             name='OperationType',
             fields=[
-                ('id', models.AutoField(primary_key=True, verbose_name='ID', auto_created=True, serialize=False)),
-                ('name', models.CharField(max_length=255, verbose_name='name', unique=True)),
-                ('lft', models.PositiveIntegerField(editable=False, db_index=True)),
-                ('rght', models.PositiveIntegerField(editable=False, db_index=True)),
-                ('tree_id', models.PositiveIntegerField(editable=False, db_index=True)),
-                ('level', models.PositiveIntegerField(editable=False, db_index=True)),
-                ('parent', mptt.fields.TreeForeignKey(to='operations.OperationType', null=True, related_name='children', blank=True)),
+                ('id', models.AutoField(verbose_name='ID', primary_key=True, serialize=False, auto_created=True)),
+                ('name', models.CharField(verbose_name='name', max_length=255, unique=True)),
+                ('lft', models.PositiveIntegerField(db_index=True, editable=False)),
+                ('rght', models.PositiveIntegerField(db_index=True, editable=False)),
+                ('tree_id', models.PositiveIntegerField(db_index=True, editable=False)),
+                ('level', models.PositiveIntegerField(db_index=True, editable=False)),
+                ('parent', mptt.fields.TreeForeignKey(blank=True, null=True, related_name='children', to='operations.OperationType')),
             ],
             options={
                 'abstract': False,
             },
+            bases=(ralph.lib.mixins.models.AdminAbsoluteUrlMixin, models.Model),
+        ),
+        migrations.AddField(
+            model_name='operation',
+            name='status',
+            field=models.ForeignKey(verbose_name='status', on_delete=django.db.models.deletion.PROTECT, to='operations.OperationStatus'),
+        ),
+        migrations.AddField(
+            model_name='operation',
+            name='tags',
+            field=ralph.lib.mixins.models.TaggableManager(verbose_name='Tags', blank=True, help_text='A comma-separated list of tags.', through='taggit.TaggedItem', to='taggit.Tag'),
         ),
         migrations.AddField(
             model_name='operation',
             name='type',
-            field=mptt.fields.TreeForeignKey(to='operations.OperationType', verbose_name='type'),
+            field=mptt.fields.TreeForeignKey(verbose_name='type', to='operations.OperationType'),
         ),
         migrations.CreateModel(
             name='Change',

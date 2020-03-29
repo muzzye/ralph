@@ -3,6 +3,7 @@ from ralph.networks.models.networks import (
     DiscoveryQueue,
     IPAddress,
     Network,
+    #Vlan, 
     NetworkEnvironment,
     NetworkKind
 )
@@ -13,5 +14,6 @@ __all__ = [
     'IPAddressStatus',
     'Network',
     'NetworkEnvironment',
-    'NetworkKind',
+    'NetworkKind'
+#    'Vlan',
 ]

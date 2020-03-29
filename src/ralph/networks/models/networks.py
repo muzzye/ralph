@@ -275,6 +275,7 @@ class Network(
         blank=True,
         default=None,
     )
+
     racks = models.ManyToManyField(
         'data_center.Rack',
         verbose_name=_('racks'),
@@ -583,6 +584,27 @@ class IPAddressQuerySet(models.QuerySet):
         return ip
 
 
+#class Vlan(
+#    AdminAbsoluteUrlMixin,
+#    NetworkMixin,
+#    NamedMixin,
+#    models.Model
+#):
+#    _parent_attr = 'network'
+#
+#    vlan = models.PositiveIntegerField(
+#        verbose_name=_('VLAN'),
+#        null=False,
+#        blank=False,
+#        default=None,
+#        editable=True,
+#        unique=True,
+#    )
+#
+#    class Meta:
+#        verbose_name = _('Vlan address')
+#        verbose_name_plural = _('Vlan addresses')
+
 class IPAddress(
     AdminAbsoluteUrlMixin,
     LastSeenMixin,
@@ -608,6 +630,23 @@ class IPAddress(
         related_name='ips',
         on_delete=models.SET_NULL,
     )
+
+    vlan = models.ForeignKey(
+        Network,
+        null=True,
+        blank=True,
+        verbose_name=('vlan'),
+        on_delete=models.SET_NULL,
+    )
+
+    #vlan = models.PositiveIntegerField(
+    #    verbose_name=_('VLAN number'),
+    #    null=True,
+    #    blank=True,
+    #    default=None,
+    #    editable=True,
+    #)
+
     address = models.GenericIPAddressField(
         verbose_name=_('IP address'),
         help_text=_('Presented as string.'),
