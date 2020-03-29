@@ -584,27 +584,6 @@ class IPAddressQuerySet(models.QuerySet):
         return ip
 
 
-#class Vlan(
-#    AdminAbsoluteUrlMixin,
-#    NetworkMixin,
-#    NamedMixin,
-#    models.Model
-#):
-#    _parent_attr = 'network'
-#
-#    vlan = models.PositiveIntegerField(
-#        verbose_name=_('VLAN'),
-#        null=False,
-#        blank=False,
-#        default=None,
-#        editable=True,
-#        unique=True,
-#    )
-#
-#    class Meta:
-#        verbose_name = _('Vlan address')
-#        verbose_name_plural = _('Vlan addresses')
-
 class IPAddress(
     AdminAbsoluteUrlMixin,
     LastSeenMixin,
@@ -638,14 +617,6 @@ class IPAddress(
         verbose_name=('vlan'),
         on_delete=models.SET_NULL,
     )
-
-    #vlan = models.PositiveIntegerField(
-    #    verbose_name=_('VLAN number'),
-    #    null=True,
-    #    blank=True,
-    #    default=None,
-    #    editable=True,
-    #)
 
     address = models.GenericIPAddressField(
         verbose_name=_('IP address'),
